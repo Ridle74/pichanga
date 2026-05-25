@@ -7,11 +7,8 @@
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
     <script type="module">
@@ -19,7 +16,6 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // TUS LLAVES DE CONEXIÓN
         const firebaseConfig = {
             apiKey: "AIzaSyBinanH1KCpAYL58VQBT2KKCOnzUFMhof8",
             authDomain: "pichanga-chocolatera.firebaseapp.com",
@@ -29,59 +25,68 @@
             appId: "1:27861650922:web:bf670c886d54f358c57693"
         };
         const appId = firebaseConfig.appId;
-
-        // Inicializamos Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-
-        // Exportamos variables globalmente para que React las pueda usar
         window.firebaseVars = { app, auth, db, doc, setDoc, onSnapshot, collection, signInAnonymously, signInWithCustomToken, appId };
     </script>
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        choco: {
-                            100: '#f4ece1', 200: '#e1d0bc', 300: '#cbb092', 400: '#b48f68',
-                            500: '#9f7243', 600: '#8c5d36', 700: '#73482d', 800: '#5f3c27', 900: '#2b1d18',
-                        },
-                        pitch: {
-                            400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b',
-                        },
-                        gold: '#fbbf24',
-                    },
-                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], }
-                }
-            }
-        }
-    </script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        body { background-color: #1c1917; color: #e7e5e4; -webkit-font-smoothing: antialiased; }
+        body { background-color: #1c1917; color: #e7e5e4; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #292524; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #57534e; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #78716c; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // [AQUÍ VA TODO EL RESTO DE TU CÓDIGO REACT QUE ME PASASTE]
-        // (He truncado el bloque para brevedad, pero asegúrate de pegar TODO el cuerpo de tu Script)
-        
         const { useState, useEffect, useMemo, useRef } = React;
-        
-        // ... (Copia y pega desde tu código original todo lo que sigue dentro de este Script) ...
-        // Asegúrate de que el bloque que termina en "root.render(<App />);" esté incluido.
-        
-        // NOTA: Como el código es muy largo, simplemente copia el bloque completo 
-        // de funciones (formatters, componentes, App, render) que me pasaste arriba 
-        // y pégalo justo después de esta línea de cierre de Script.
+
+        const formatDateText = (dateStr) => {
+            if (!dateStr) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                const [y, m, d] = dateStr.split('-');
+                const date = new Date(y, m - 1, d);
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                let res = date.toLocaleDateString('es-ES', options);
+                return res.charAt(0).toUpperCase() + res.slice(1);
+            }
+            return dateStr;
+        };
+
+        const formatTimeText = (timeStr) => {
+            if (!timeStr) return '';
+            if (/^\d{2}:\d{2}$/.test(timeStr)) {
+                let [h, m] = timeStr.split(':');
+                let hour = parseInt(h, 10);
+                const ampm = hour >= 12 ? 'p.m.' : 'a.m.';
+                hour = hour % 12 || 12;
+                return `${hour}:${m} ${ampm}`;
+            }
+            return timeStr;
+        };
+
+        const formatPlayerName = (player, isAdmin) => {
+            let name = `${player.name} ${player.lastName ? (isAdmin ? player.lastName : player.lastName.charAt(0) + '.') : ''}`;
+            if (player.alias) name += ` "${player.alias}"`;
+            return name;
+        };
+
+        const initialDB = {
+            adminCredentials: { username: "admin", password: "1234" },
+            players: [
+                { id: "1", name: "Carlos", lastName: "Gomez", alias: "Charly", phone: "987654321", photoUrl: "", username: "carlos", password: "123", baseMatches: 0, basePoints: 0, baseGoals: 0, baseWins: 0, position: "DEL" },
+                { id: "2", name: "Luis", lastName: "Perez", alias: "Lucho", phone: "912345678", photoUrl: "", username: "luis", password: "123", baseMatches: 0, basePoints: 0, baseGoals: 0, baseWins: 0, position: "DEF" },
+                { id: "3", name: "Jorge", lastName: "", alias: "", phone: "", photoUrl: "", username: "", password: "", baseMatches: 0, basePoints: 0, baseGoals: 0, baseWins: 0, position: "ARQ" }
+            ],
+            matches: []
+        };
+
+        // ... (Copia aquí el resto de tu código desde tu bloc de notas original) ...
+        // ¡Ojo! Asegúrate de incluir desde la función "Modal" hasta el final "root.render(<App />);"
     </script>
 </body>
 </html>
