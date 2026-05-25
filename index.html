@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pichanga Chocolatera</title>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script type="module">
+        // 1. Importamos las herramientas de Firebase EXACTAS que tu código necesita
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 2. TUS LLAVES (La caja fuerte) - Inyectadas directamente sin tocar lógica extraña
+        const firebaseConfig = {
+            apiKey: "AIzaSyBinanH1KCpAYL58VQBT2KKCOnzUFMhof8",
+            authDomain: "pichanga-chocolatera.firebaseapp.com",
+            projectId: "pichanga-chocolatera",
+            storageBucket: "pichanga-chocolatera.firebasestorage.app",
+            messagingSenderId: "27861650922",
+            appId: "1:27861650922:web:bf670c886d54f358c57693"
+        };
+        
+        // El appId lo usamos como nombre de tu tabla en la base de datos
+        const appId = firebaseConfig.appId;
+
+        // 3. Inicializamos Firebase con TUS llaves
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // 4. Exportamos las variables para que TU código React (abajo) las pueda usar sin romperse
+        window.firebaseVars = { app, auth, db, doc, setDoc, onSnapshot, collection, signInAnonymously, signInWithCustomToken, appId };
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        choco: {
+                            100: '#f4ece1',
+                            200: '#e1d0bc',
+                            300: '#cbb092',
+                            400: '#b48f68',
+                            500: '#9f7243',
+                            600: '#8c5d36',
+                            700: '#73482d',
+                            800: '#5f3c27',
+                            900: '#2b1d18',
+                        },
+                        pitch: {
+                            400: '#34d399',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                        },
+                        gold: '#fbbf24',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body {
+            background-color: #1c1917; /* stone-900 */
+            color: #e7e5e4; /* stone-200 */
+            -webkit-font-smoothing: antialiased;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #292524;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #57534e;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #78716c;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- FORMATTERS ---
+        const formatDateText = (dateStr) => {
+            if (!dateStr) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                const [y, m, d] = dateStr.split('-');
+                const date = new Date(y, m - 1, d);
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                let res = date.toLocaleDateString('es-ES', options);
+                return res.charAt(0).toUpperCase() + res.slice(1);
+            }
+            return dateStr;
+        };
+
+        const formatTimeText = (timeStr) => {
+            if (!timeStr) return '';
+            if (/^\d{2}:\d{2}$/.test(timeStr)) {
+                let [h, m] = timeStr.split(':');
+                let hour = parseInt(h, 10);
+                const ampm = hour >= 12 ? 'p.m.' : 'a.m.';
+                hour = hour % 12 || 12;
+                return `${hour}:${m} ${ampm}`;
+            }
+            return timeStr;
+        };
+
+        const formatPlayerName = (player, isAdmin) => {
+            // isAdmin = true o cuando queremos forzar a que muestre nombre + apellido completo
+            let name = `${player.name} ${player.lastName ? (isAdmin ? player.lastName : player.lastName.charAt(0) + '.') : ''}`;
+            if (player.alias) name += ` "${player.alias}"`;
+            return name;
+        };
+
+        // --- MOCK INITIAL DATA ---
+        const initialDB = {
+            adminCredentials: { username: "admin", password: "1234" },
+            players: [
+                { id: "1", name: "Carlos", lastName: "Gomez", alias: "Charly", phone: "987654321", photoUrl: "", username: "carlos", password: "123", baseMatches: 0, basePoints: 0, baseGoals: 0, baseWins: 0, position: "DEL" },
+                { id: "2", name: "Luis", lastName: "Perez", alias: "Lucho", phone: "912345678", photoUrl: "", username: "luis", password: "123", baseMatches: 0, basePoints: 0, baseGoals: 0, baseWins: 0, position: "DEF" },
+                { id: "3", name: "Jorge", lastName: "", alias: "", phone: "", photoUrl: "", username: "", password: "", baseMatches: 0, basePoints: 0, baseGoals: 0, baseWins: 0, position: "ARQ" }
+            ],
+            matches: []
+        };
+
+        // --- COMPONENTS BASE ---
+        function Modal({ isOpen, onClose, title, children }) {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-stone-800 rounded-2xl w-full max-w-md md:max-w-xl lg:max-w-2xl border border-stone-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="bg-stone-900 border-b border-stone-700 p-4 flex justify-between items-center shrink-0">
+                            <h3 className="text-lg font-bold text-pitch-400">{title}</h3>
+                            <button onClick={onClose} className="text-stone-400 hover:text-white transition-colors p-1">
+                                <i className="ph ph-x text-xl"></i>
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto custom-scrollbar">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function PlayerAvatar({ player, className = "w-10 h-10 text-sm" }) {
+            const [imgError, setImgError] = useState(false);
+            const hasImage = player.photoUrl && !imgError;
+
+            if (hasImage) {
+                return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)} className={`${className} rounded-full object-cover border border-pitch-500 shadow-inner bg-stone-900 shrink-0`} />;
+            }
+            return (
+                <div className={`${className} shrink-0 rounded-full bg-gradient-to-br from-pitch-600 to-pitch-800 border border-pitch-500 flex items-center justify-center text-white font-bold uppercase shadow-inner`}>
+                    {player.name?.charAt(0)}{player.lastName ? player.lastName.charAt(0) : ''}
+                </div>
+            );
+        }
+
+        function ImageCropperModal({ file, onCropped, onCancel }) {
+            const [src, setSrc] = useState(null);
+            const canvasRef = useRef(null);
+            const imgRef = useRef(null);
+            const [scale, setScale] = useState(1);
+            const [pos, setPos] = useState({ x: 0, y: 0 });
+            const [isDragging, setIsDragging] = useState(false);
+            const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+
+            useEffect(() => {
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = e => setSrc(e.target.result);
+                    reader.readAsDataURL(file);
+                }
+            }, [file]);
+
+            const handleCrop = () => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const img = imgRef.current;
+                
+                canvas.width = 200;
+                canvas.height = 200;
+                
+                ctx.clearRect(0, 0, 200, 200);
+                
+                const drawWidth = img.width * scale;
+                const drawHeight = img.height * scale;
+                
+                ctx.drawImage(img, pos.x, pos.y, drawWidth, drawHeight);
+                onCropped(canvas.toDataURL('image/jpeg', 0.8));
+            };
+
+            if (!src) return null;
+
+            return (
+                <Modal isOpen={true} onClose={onCancel} title="Recortar Imagen">
+                    <div className="flex flex-col items-center space-y-6 overflow-hidden">
+                        <p className="text-stone-400 text-sm text-center">Arrastra la imagen y ajusta el zoom para centrar tu rostro.</p>
+                        <div 
+                            className="relative w-64 h-64 bg-stone-900 border-2 border-dashed border-stone-600 rounded-full overflow-hidden cursor-move touch-none shadow-inner"
+                            onMouseDown={e => { setIsDragging(true); setStartPos({ x: e.clientX - pos.x, y: e.clientY - pos.y }); }}
+                            onMouseMove={e => { if (isDragging) setPos({ x: e.clientX - startPos.x, y: e.clientY - startPos.y }); }}
+                            onMouseUp={() => setIsDragging(false)}
+                            onMouseLeave={() => setIsDragging(false)}
+                            onTouchStart={e => { setIsDragging(true); setStartPos({ x: e.touches[0].clientX - pos.x, y: e.touches[0].clientY - pos.y }); }}
+                            onTouchMove={e => { if (isDragging) setPos({ x: e.touches[0].clientX - startPos.x, y: e.touches[0].clientY - startPos.y }); }}
+                            onTouchEnd={() => setIsDragging(false)}
+                        >
+                            <img 
+                                ref={imgRef}
+                                src={src} 
+                                alt="Crop preview" 
+                                style={{ 
+                                    transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`, 
+                                    transformOrigin: 'top left',
+                                    pointerEvents: 'none',
+                                    maxWidth: 'none'
+                                }} 
+                            />
+                        </div>
+                        <div className="w-full flex items-center gap-3">
+                            <i className="ph-fill ph-image text-stone-500 text-xl"></i>
+                            <input type="range" min="0.1" max="3" step="0.1" value={scale} onChange={e => setScale(parseFloat(e.target.value))} className="w-full accent-pitch-500" />
+                            <i className="ph-fill ph-magnifying-glass-plus text-stone-500 text-xl"></i>
+                        </div>
+                        <div className="flex gap-2 w-full pt-2 border-t border-stone-700">
+                            <button onClick={onCancel} className="flex-1 bg-stone-700 hover:bg-stone-600 py-3 rounded-lg text-white font-semibold transition-colors">Cancelar</button>
+                            <button onClick={handleCrop} className="flex-1 bg-pitch-600 hover:bg-pitch-500 py-3 rounded-lg text-white font-bold transition-colors">Aplicar Recorte</button>
+                        </div>
+                        <canvas ref={canvasRef} className="hidden" />
+                    </div>
+                </Modal>
+            );
+        }
+
+        // --- SECCIONES PRINCIPALES ---
+        function MatchInfoSection({ currentMatch, updateCurrentMatch, deleteMatch, isAdmin }) {
+            const [isEditing, setIsEditing] = useState(false);
+            const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+            const [formData, setFormData] = useState({});
+
+            useEffect(() => {
+                if (currentMatch) setFormData({ ...currentMatch });
+            }, [currentMatch]);
+
+            if (!currentMatch) return null;
+
+            const handleSave = () => {
+                updateCurrentMatch({ ...currentMatch, ...formData });
+                setIsEditing(false);
+            };
+
+            return (
+                <section className="bg-stone-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-stone-700/50 relative overflow-hidden">
+                    <div className="flex justify-between items-start mb-6 relative z-10">
+                        <h2 className="text-xl sm:text-2xl font-bold text-pitch-400 flex items-center gap-2">
+                            <i className="ph-fill ph-calendar-check"></i> {currentMatch.status === 'completed' ? 'Partido Finalizado' : 'Próxima Pichanga'}
+                        </h2>
+                        {isAdmin && (
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowDeleteConfirm(true)} className="text-red-400 hover:text-red-300 bg-red-900/30 p-2 rounded-lg transition-colors border border-red-900/50" title="Eliminar Partido">
+                                    <i className="ph ph-trash text-xl"></i>
+                                </button>
+                                <button onClick={() => setIsEditing(true)} className="text-pitch-400 hover:text-pitch-300 bg-stone-700/50 p-2 rounded-lg transition-colors border border-stone-600" title="Editar Partido">
+                                    <i className="ph ph-pencil-simple text-xl"></i>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
+                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-calendar-blank text-2xl text-choco-400 mt-1"></i>
+                            <div>
+                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Fecha y Hora</p>
+                                <p className="font-bold text-sm sm:text-lg text-white capitalize">{formatDateText(currentMatch.date)}</p>
+                                <p className="text-xs sm:text-sm text-stone-300">{formatTimeText(currentMatch.startTime)} - {formatTimeText(currentMatch.endTime)}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-map-pin text-2xl text-choco-400 mt-1"></i>
+                            <div>
+                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Lugar</p>
+                                {currentMatch.mapUrl ? (
+                                    <a href={currentMatch.mapUrl} target="_blank" className="font-bold text-sm sm:text-base text-blue-400 hover:underline">{currentMatch.location}</a>
+                                ) : (
+                                    <p className="font-bold text-sm sm:text-base text-white">{currentMatch.location}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-coins text-2xl text-pitch-500 mt-1"></i>
+                            <div>
+                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Cupo Completo</p>
+                                <p className="font-bold text-lg sm:text-xl text-pitch-400">S/ {Number(currentMatch.quota).toFixed(2)}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-clock-countdown text-2xl text-red-400 mt-1"></i>
+                            <div>
+                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Plazo de Yapeo</p>
+                                <p className="font-bold text-xs sm:text-sm text-red-300 capitalize">{formatDateText(currentMatch.deadlineDate)}</p>
+                                <p className="text-xs sm:text-sm text-red-400">{formatTimeText(currentMatch.deadlineTime)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} title="Editar Información del Partido">
+                        <div className="space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-sm text-stone-400 mb-1">Fecha</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div><label className="block text-sm text-stone-400 mb-1">Inicio</label><input type="time" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                    <div><label className="block text-sm text-stone-400 mb-1">Fin</label><input type="time" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-sm text-stone-400 mb-1">Lugar</label><input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Link Google Maps (Opcional)</label><input type="text" value={formData.mapUrl} onChange={e => setFormData({...formData, mapUrl: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-sm text-stone-400 mb-1">Cuota (S/)</label><input type="number" step="0.10" value={formData.quota} onChange={e => setFormData({...formData, quota: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div><label className="block text-sm text-stone-400 mb-1">Día Límite</label><input type="date" value={formData.deadlineDate} onChange={e => setFormData({...formData, deadlineDate: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                    <div><label className="block text-sm text-stone-400 mb-1">Hora Límite</label><input type="time" value={formData.deadlineTime} onChange={e => setFormData({...formData, deadlineTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-stone-400 mb-1">Estado del Partido</label>
+                                <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none">
+                                    <option className="bg-stone-900 text-white" value="upcoming">Próxima / En Curso</option>
+                                    <option className="bg-stone-900 text-white" value="completed">Finalizada (Suma a estadísticas)</option>
+                                </select>
+                            </div>
+                            <button onClick={handleSave} className="w-full bg-pitch-600 hover:bg-pitch-500 py-3 rounded-lg text-white font-bold transition-colors">Guardar Cambios</button>
+                        </div>
+                    </Modal>
+
+                    <Modal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Eliminar Partido">
+                        <div className="space-y-4">
+                            <div className="bg-red-900/20 p-4 rounded-lg border border-red-700/50">
+                                <p className="text-stone-300 text-sm leading-relaxed">¿Seguro que deseas eliminar este partido?</p>
+                                <p className="text-red-400 text-sm font-semibold mt-2">Esta acción no se puede deshacer y se borrarán todos los datos (asistencias, goles, equipos) asociados a esta fecha.</p>
+                            </div>
+                            <div className="flex gap-3 mt-4">
+                                <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-stone-700 hover:bg-stone-600 py-3 rounded-lg text-white font-semibold transition-colors">Cancelar</button>
+                                <button onClick={() => { if(deleteMatch) deleteMatch(currentMatch.id); setShowDeleteConfirm(false); }} className="flex-1 bg-red-600 hover:bg-red-500 py-3 rounded-lg text-white font-semibold shadow-lg shadow-red-900/50 transition-colors">Sí, Eliminar</button>
+                            </div>
+                        </div>
+                    </Modal>
+                </section>
+            );
+        }
+
+        function CurrentRosterSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin }) {
+            const [showAddModal, setShowAddModal] = useState(false);
+            const [searchTerm, setSearchTerm] = useState("");
+            const [copyFeedback, setCopyFeedback] = useState(false);
+
+            if (!currentMatch) return null;
+
+            const attendeesMap = currentMatch.attendees || {};
+            const isCompleted = currentMatch.status === 'completed';
+
+            const convocadosList = computedPlayers.filter(p => attendeesMap[p.id] && attendeesMap[p.id] !== 'none');
+            const noConvocadosList = computedPlayers.filter(p => !attendeesMap[p.id] || attendeesMap[p.id] === 'none');
+
+            const filteredNoConvocados = noConvocadosList.filter(p => 
+                p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                (p.lastName && p.lastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (p.alias && p.alias.toLowerCase().includes(searchTerm.toLowerCase()))
+            );
+
+            const totalCollected = convocadosList.reduce((sum, p) => {
+                if (attendeesMap[p.id] === 'full') return sum + Number(currentMatch.quota);
+                if (attendeesMap[p.id] === 'half') return sum + (Number(currentMatch.quota) / 2);
+                return sum;
+            }, 0);
+
+            const handleStatusChange = (playerId, newStatus) => {
+                const newAttendees = { ...attendeesMap };
+                if (newStatus === 'none') delete newAttendees[playerId];
+                else newAttendees[playerId] = newStatus;
+                updateCurrentMatch({ ...currentMatch, attendees: newAttendees });
+            };
+
+            const handleCopyNumbers = () => {
+                const textToCopy = convocadosList
+                    .filter(p => p.phone)
+                    .map(p => `${p.name} ${p.lastName || ''} - ${p.phone}`)
+                    .join('\n');
+                
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        setCopyFeedback(true);
+                        setTimeout(() => setCopyFeedback(false), 2000);
+                    }).catch(() => {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = textToCopy;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            setCopyFeedback(true);
+                            setTimeout(() => setCopyFeedback(false), 2000);
+                        } catch (err) {}
+                        document.body.removeChild(textArea);
+                    });
+                }
+            };
+
+            return (
+                <section className="bg-stone-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-stone-700/50">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                        <div>
+                            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                                <i className="ph-fill ph-users-three text-pitch-400"></i> Convocados Oficiales
+                            </h2>
+                            <p className="text-stone-400 text-xs sm:text-sm mt-1">
+                                {convocadosList.length} Chocolateros {isAdmin && <span>• Recaudado: <span className="text-pitch-400 font-bold">S/ {totalCollected.toFixed(2)}</span></span>}
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                            <button onClick={handleCopyNumbers} className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800/80 text-blue-300 px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors border border-blue-900 text-sm">
+                                {copyFeedback ? <><i className="ph-fill ph-check"></i> Copiados!</> : <><i className="ph ph-copy"></i> Copiar N°s</>}
+                            </button>
+                            {isAdmin && !isCompleted && (
+                                <button onClick={() => setShowAddModal(true)} className="flex-1 sm:flex-none bg-stone-700 hover:bg-stone-600 text-white px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors border border-stone-600 text-sm">
+                                    <i className="ph ph-user-plus"></i> Armar Lista
+                                </button>
+                            )}
+                            {isAdmin && isCompleted && (
+                                <div className="flex-1 sm:flex-none bg-pitch-900/50 text-pitch-400 px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 border border-pitch-900 text-sm">
+                                    <i className="ph-fill ph-check-circle"></i> Partido Finalizado
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3">
+                        {convocadosList.map(player => {
+                            const status = attendeesMap[player.id];
+                            return (
+                                <div key={player.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-stone-900 p-3 rounded-xl border border-stone-700 gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <PlayerAvatar player={player} className="w-10 h-10" />
+                                        <div>
+                                            <p className="font-semibold text-stone-100 text-sm sm:text-base">
+                                                {formatPlayerName(player, isAdmin)}
+                                            </p>
+                                            {isAdmin && player.phone && <p className="text-xs text-stone-500 font-mono"><i className="ph ph-whatsapp logo text-pitch-500"></i> {player.phone}</p>}
+                                        </div>
+                                    </div>
+
+                                    {isAdmin && !isCompleted ? (
+                                        <select value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)} className="bg-stone-800 text-xs sm:text-sm border border-stone-600 rounded-lg p-2 focus:border-pitch-500 outline-none text-stone-200 w-full sm:w-auto">
+                                            <option className="bg-stone-900 text-white" value="full">✔️ Cupo Completo</option>
+                                            <option className="bg-stone-900 text-white" value="half">🌗 Medio Cupo</option>
+                                            <option className="bg-stone-900 text-white" value="free">🎁 Gratis / Invitado</option>
+                                            <option className="bg-stone-900 text-white" value="absent">❌ Faltó (Baja %)</option>
+                                            <option className="bg-stone-900 text-white" value="excused">🏥 Justificado (No baja %)</option>
+                                            <option className="bg-stone-900 text-red-400" value="none" className="text-red-400 font-semibold">🗑️ Quitar de la lista</option>
+                                        </select>
+                                    ) : (
+                                        <div className="text-xs sm:text-sm font-medium self-start sm:self-auto">
+                                            {status === 'full' && <span className="text-pitch-400 bg-pitch-400/10 px-2 py-1 rounded border border-pitch-400/20 flex items-center gap-1"><i className="ph-fill ph-check-circle"></i> Va Completo</span>}
+                                            {status === 'half' && <span className="text-gold bg-gold/10 px-2 py-1 rounded border border-gold/20 flex items-center gap-1"><i className="ph-fill ph-star-half"></i> Medio Cupo</span>}
+                                            {status === 'free' && <span className="text-blue-400 bg-blue-400/10 px-2 py-1 rounded border border-blue-400/20 flex items-center gap-1"><i className="ph-fill ph-gift"></i> Invitado</span>}
+                                            {status === 'absent' && <span className="text-red-400 bg-red-400/10 px-2 py-1 rounded border border-red-400/20 flex items-center gap-1"><i className="ph-fill ph-x-circle"></i> Faltó</span>}
+                                            {status === 'excused' && <span className="text-stone-400 bg-stone-400/10 px-2 py-1 rounded border border-stone-400/20 flex items-center gap-1"><i className="ph-fill ph-first-aid"></i> Justificado</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {convocadosList.length === 0 && (
+                            <div className="text-center py-10 border-2 border-dashed border-stone-700 rounded-xl bg-stone-900/50">
+                                <i className="ph ph-users-three text-4xl sm:text-5xl text-stone-600 mb-3 block"></i>
+                                <p className="text-stone-400 font-medium text-sm sm:text-lg">Aún no hay convocados en la lista oficial.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <Modal isOpen={showAddModal} onClose={() => {setShowAddModal(false); setSearchTerm("");}} title="Armar Convocatoria">
+                        <div className="space-y-4">
+                            <div className="relative">
+                                <i className="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-500"></i>
+                                <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-stone-900 border border-stone-700 rounded-lg py-2 pl-10 pr-3 text-white outline-none text-sm" />
+                            </div>
+                            <div className="max-h-64 sm:max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                {filteredNoConvocados.map(p => (
+                                    <div key={p.id} className="flex justify-between items-center p-2 hover:bg-stone-700/50 rounded-lg border border-transparent hover:border-stone-600">
+                                        <div className="flex items-center gap-2">
+                                            <PlayerAvatar player={p} className="w-8 h-8 text-xs" />
+                                            <div>
+                                                <p className="font-semibold text-stone-200 text-xs sm:text-sm">{formatPlayerName(p, true)}</p>
+                                                <p className="text-[10px] sm:text-xs text-stone-500">{p.points || 0} pts en {p.computedMatches || 0} PJ</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => handleStatusChange(p.id, 'full')} className="bg-pitch-600/20 text-pitch-400 hover:bg-pitch-600 hover:text-white px-2 py-1 rounded text-xs font-bold transition-colors">
+                                            Convocar
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={() => setShowAddModal(false)} className="w-full bg-stone-700 hover:bg-stone-600 py-3 rounded-lg text-white font-semibold transition-colors">Listo</button>
+                        </div>
+                    </Modal>
+                </section>
+            );
+        }
+
+        function MatchHighlightsSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin, loggedPlayerId }) {
+            if (!currentMatch || currentMatch.status !== 'completed') return null;
+
+            const goalsList = currentMatch.goals || [];
+            const scoreA = goalsList.filter(g => g.team === 'A').length;
+            const scoreB = goalsList.filter(g => g.team === 'B').length;
+
+            const goalCounts = {};
+            goalsList.forEach(g => {
+                goalCounts[g.playerId] = (goalCounts[g.playerId] || 0) + 1;
+            });
+
+            let scorers = Object.keys(goalCounts).map(pId => {
+                const player = computedPlayers.find(p => p.id === pId) || { id: pId, name: 'Desconocido' };
+                return { player, count: goalCounts[pId], team: currentMatch.teams?.[pId] };
+            });
+
+            // Find the maximum goals scored
+            const maxGoals = scorers.length > 0 ? Math.max(...scorers.map(s => s.count)) : 0;
+            let candidates = scorers.filter(s => s.count === maxGoals);
+
+            // Tie-Breaker Rule 1: Prioritize the winning team
+            let winningTeam = null;
+            if (scoreA > scoreB) winningTeam = 'A';
+            else if (scoreB > scoreA) winningTeam = 'B';
+
+            if (winningTeam) {
+                const winningTeamCandidates = candidates.filter(s => s.team === winningTeam);
+                if (winningTeamCandidates.length > 0) candidates = winningTeamCandidates;
+            }
+
+            let topScorer = null;
+            let isTiedScorer = false;
+
+            // Tie-Breaker Rule 2: Manual Selection if tie persists
+            if (candidates.length === 1) {
+                topScorer = candidates[0];
+            } else if (candidates.length > 1) {
+                if (currentMatch.manualTopScorerId) {
+                    topScorer = candidates.find(c => c.player.id === currentMatch.manualTopScorerId);
+                    if (!topScorer) isTiedScorer = true; // Fallback if ID is wrong
+                } else {
+                    isTiedScorer = true;
+                }
+            }
+
+            scorers.sort((a, b) => b.count - a.count);
+
+            const teamAWinner = scoreA > scoreB;
+            const teamBWinner = scoreB > scoreA;
+            const isDraw = scoreA === scoreB;
+
+            // --- MVP Logic ---
+            const isVoting = currentMatch.mvpMode === 'voting';
+            const attendees = computedPlayers.filter(p => currentMatch.attendees?.[p.id] && currentMatch.attendees?.[p.id] !== 'none');
+            
+            let mvpPlayer = null;
+            let tiedMvps = [];
+
+            if (isVoting) {
+                const votes = currentMatch.mvpVotes || {};
+                const voteCounts = {};
+                Object.values(votes).forEach(v => voteCounts[v] = (voteCounts[v] || 0) + 1);
+                
+                const maxVotes = Object.keys(voteCounts).length > 0 ? Math.max(...Object.values(voteCounts)) : 0;
+                if (maxVotes > 0) {
+                    const leaders = Object.keys(voteCounts).filter(k => voteCounts[k] === maxVotes);
+                    if (leaders.length === 1) mvpPlayer = attendees.find(p => p.id === leaders[0]);
+                    else tiedMvps = leaders.map(id => attendees.find(p => p.id === id)).filter(Boolean);
+                }
+            } else {
+                if (currentMatch.mvpId) mvpPlayer = attendees.find(p => p.id === currentMatch.mvpId);
+            }
+
+            const iAttended = attendees.some(p => p.id === loggedPlayerId);
+            const myVote = currentMatch.mvpVotes?.[loggedPlayerId] || '';
+
+            return (
+                <section className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-2xl p-3 sm:p-6 shadow-2xl border border-pitch-900/50 mb-6 sm:mb-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-pitch-500/10 blur-3xl rounded-full pointer-events-none"></div>
+                    
+                    <h2 className="text-lg sm:text-2xl font-black text-white flex items-center justify-center gap-2 mb-4 sm:mb-6 relative z-10 text-center">
+                        <i className="ph-fill ph-trophy text-gold text-2xl sm:text-3xl"></i> Resumen del Partido
+                    </h2>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-6 relative z-10">
+                        {/* Marcador Central */}
+                        <div className="bg-stone-900/80 border border-stone-700 p-3 sm:p-6 rounded-2xl flex flex-col items-center justify-center col-span-2 shadow-inner">
+                            <p className="text-stone-400 text-[10px] sm:text-sm font-bold uppercase tracking-widest mb-2 sm:mb-4">Marcador Final</p>
+                            <div className="flex items-center gap-4 sm:gap-6">
+                                <div className="text-center">
+                                    <span className={`text-4xl sm:text-6xl font-black ${teamAWinner ? 'text-blue-400' : 'text-stone-500'}`}>{scoreA}</span>
+                                    <p className="text-blue-400 text-[10px] sm:text-sm font-bold mt-1 uppercase tracking-wider">Azul</p>
+                                </div>
+                                <span className="text-2xl sm:text-3xl text-stone-600 font-bold">-</span>
+                                <div className="text-center">
+                                    <span className={`text-4xl sm:text-6xl font-black ${teamBWinner ? 'text-red-400' : 'text-stone-500'}`}>{scoreB}</span>
+                                    <p className="text-red-400 text-[10px] sm:text-sm font-bold mt-1 uppercase tracking-wider">Rojo</p>
+                                </div>
+                            </div>
+                            <div className="mt-3 sm:mt-6 px-3 py-1 sm:py-1.5 rounded-full bg-stone-800 border border-stone-600 text-[10px] sm:text-xs font-bold text-stone-300">
+                                {isDraw ? 'Empate' : `Victoria Equipo ${teamAWinner ? 'Azul' : 'Rojo'}`}
+                            </div>
+                        </div>
+
+                        {/* Top Scorer */}
+                        <div className="bg-gradient-to-t from-stone-900 to-stone-800 border border-stone-700 p-2 sm:p-6 rounded-2xl flex flex-col items-center justify-center col-span-1 shadow-inner relative">
+                            <p className="text-[10px] sm:text-xs font-black text-stone-400 uppercase tracking-widest mb-2 text-center leading-tight">Máx.<br/>Goleador</p>
+                            {isTiedScorer ? (
+                                <>
+                                    {isAdmin ? (
+                                        <div className="text-center w-full">
+                                            <p className="text-[9px] sm:text-xs font-bold text-stone-300 mb-1 leading-tight">Empate {maxGoals} goles. Elige:</p>
+                                            <div className="flex gap-1 flex-wrap justify-center mb-1">
+                                                {candidates.map(c => (
+                                                    <button key={c.player.id} onClick={() => updateCurrentMatch({...currentMatch, manualTopScorerId: c.player.id})} className="bg-stone-800 hover:bg-stone-700 border border-stone-600 rounded p-1 transition-colors">
+                                                        <PlayerAvatar player={c.player} className="w-5 h-5 sm:w-8 sm:h-8" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center text-stone-500 flex flex-col items-center">
+                                            <i className="ph-fill ph-scales text-2xl sm:text-4xl text-stone-600 mb-1"></i>
+                                            <p className="text-[9px] sm:text-sm font-bold text-stone-400 leading-tight">Empate<br/>en goles</p>
+                                        </div>
+                                    )}
+                                </>
+                            ) : topScorer ? (
+                                <>
+                                    {currentMatch.manualTopScorerId && isAdmin && candidates.length > 1 && (
+                                        <button onClick={() => updateCurrentMatch({...currentMatch, manualTopScorerId: null})} className="absolute top-1 right-1 sm:top-2 sm:right-2 text-stone-500 hover:text-red-400"><i className="ph ph-arrow-counter-clockwise"></i></button>
+                                    )}
+                                    <div className="flex flex-col items-center mt-2">
+                                        <div className="relative">
+                                            <PlayerAvatar player={topScorer.player} className="w-12 h-12 sm:w-16 sm:h-16 text-lg sm:text-2xl shadow-lg border-2 border-stone-500" />
+                                            <div className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-stone-900 rounded-full p-0.5 sm:p-1 border border-stone-700">
+                                                <i className="ph-fill ph-soccer-ball text-sm sm:text-xl text-pitch-400"></i>
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] sm:text-sm font-bold text-white mt-3 text-center leading-tight px-1">{formatPlayerName(topScorer.player, true)}</p>
+                                        <p className="text-gold font-black text-xs sm:text-base mt-0.5">⚽ {topScorer.count} {topScorer.count === 1 ? 'Gol' : 'Goles'}</p>
+                                        {topScorer.team && <p className={`text-[9px] sm:text-xs font-bold mt-0.5 ${topScorer.team === 'A' ? 'text-blue-400' : 'text-red-400'}`}>Equipo {topScorer.team === 'A' ? 'Azul' : 'Rojo'}</p>}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center text-stone-500 flex flex-col items-center">
+                                    <i className="ph ph-mask-sad text-2xl sm:text-4xl mb-1"></i>
+                                    <p className="text-[9px] sm:text-sm font-medium leading-tight">Sin goles</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* MVP (Estilo Dorado) */}
+                        <div className="bg-gradient-to-t from-amber-900/30 to-stone-900 border border-gold/40 p-2 sm:p-6 rounded-2xl flex flex-col items-center justify-start col-span-1 shadow-[0_0_15px_rgba(251,191,36,0.15)] relative pt-6 sm:pt-10">
+                            {isAdmin && (
+                                <div className="absolute top-1 right-1 sm:top-2 sm:right-2 flex overflow-hidden rounded border border-stone-600 text-[8px] sm:text-[10px] font-bold z-20">
+                                    <button onClick={() => updateCurrentMatch({ ...currentMatch, mvpMode: 'manual' })} className={`px-1.5 py-0.5 sm:px-2 sm:py-1 transition-colors ${!isVoting ? 'bg-gold text-stone-900' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}>Manual</button>
+                                    <button onClick={() => updateCurrentMatch({ ...currentMatch, mvpMode: 'voting' })} className={`px-1.5 py-0.5 sm:px-2 sm:py-1 transition-colors ${isVoting ? 'bg-gold text-stone-900' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}>Votos</button>
+                                </div>
+                            )}
+                            <div className="absolute -top-2.5 sm:-top-3 bg-gold text-stone-900 text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-0.5 sm:py-1 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1">
+                                <i className="ph-fill ph-star"></i> MVP
+                            </div>
+
+                            {/* MVP Display */}
+                            {mvpPlayer ? (
+                                <div className="flex flex-col items-center mt-2 sm:mt-0 w-full">
+                                    <PlayerAvatar player={mvpPlayer} className="w-12 h-12 sm:w-16 sm:h-16 text-lg sm:text-2xl shadow-[0_0_15px_rgba(251,191,36,0.4)] border-2 border-gold" />
+                                    <p className="text-[10px] sm:text-sm font-bold text-white mt-3 text-center leading-tight px-1">{formatPlayerName(mvpPlayer, true)}</p>
+                                    {isVoting && <p className="text-gold font-black text-[9px] sm:text-xs mt-0.5">{Object.values(currentMatch.mvpVotes || {}).filter(v=>v===mvpPlayer.id).length} Votos</p>}
+                                </div>
+                            ) : tiedMvps.length > 0 ? (
+                                <div className="text-center text-stone-400 flex flex-col items-center">
+                                    <i className="ph-fill ph-users text-xl sm:text-3xl text-gold mb-1"></i>
+                                    <p className="text-[9px] sm:text-xs font-bold leading-tight text-gold">Empate de votos</p>
+                                </div>
+                            ) : (
+                                <div className="text-center text-stone-500 flex flex-col items-center mt-1">
+                                    <i className="ph ph-user-circle-dashed text-2xl sm:text-4xl mb-1 text-gold/50"></i>
+                                    <p className="text-[9px] sm:text-sm font-medium leading-tight text-gold/70">Por definir</p>
+                                </div>
+                            )}
+
+                            {/* MVP Controls */}
+                            <div className="mt-auto pt-2 w-full">
+                                {!isVoting && isAdmin && (
+                                    <select value={currentMatch.mvpId || ''} onChange={(e) => updateCurrentMatch({...currentMatch, mvpId: e.target.value})} className="w-full bg-stone-800 border border-stone-600 rounded p-1 text-white outline-none text-[9px] sm:text-xs text-center mt-1">
+                                        <option className="bg-stone-900 text-white" value="">Elegir MVP...</option>
+                                        {attendees.map(p => <option className="bg-stone-900 text-white" key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                )}
+                                {isVoting && loggedPlayerId && iAttended && (
+                                    <select value={myVote} onChange={(e) => updateCurrentMatch({...currentMatch, mvpVotes: {...(currentMatch.mvpVotes||{}), [loggedPlayerId]: e.target.value}})} className="w-full bg-amber-900/30 border border-gold/50 rounded p-1 text-gold outline-none text-[9px] sm:text-xs text-center mt-1 font-semibold">
+                                        <option className="bg-stone-900 text-gold" value="">Tu Voto MVP...</option>
+                                        {attendees.map(p => <option className="bg-stone-900 text-gold" key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                )}
+                                {isVoting && (!loggedPlayerId || !iAttended) && (
+                                    <p className="text-[8px] sm:text-[10px] text-stone-500 text-center mt-1">Votación abierta a jugadores.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Lista de Goleadores */}
+                        <div className="bg-stone-900/80 border border-stone-700 p-3 sm:p-5 rounded-2xl col-span-2 md:col-span-4 shadow-inner flex flex-col max-h-[140px] sm:max-h-[200px]">
+                            <p className="text-stone-400 text-[10px] sm:text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <i className="ph-fill ph-list-numbers text-sm sm:text-lg text-pitch-400"></i> Tabla de Goles
+                            </p>
+                            <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-1.5 sm:space-y-2">
+                                {scorers.length > 0 ? scorers.map((s, idx) => (
+                                    <div key={s.player.id} className="flex justify-between items-center bg-stone-800 p-1.5 sm:p-2 rounded-lg border border-stone-700/50">
+                                        <div className="flex items-center gap-1.5 sm:gap-2">
+                                            <span className="text-stone-500 font-bold text-[10px] sm:text-xs w-3 sm:w-4 text-right">{idx + 1}.</span>
+                                            <PlayerAvatar player={s.player} className="w-5 h-5 sm:w-6 sm:h-6 text-[8px] sm:text-[10px]" />
+                                            <span className="text-[10px] sm:text-sm font-medium text-stone-200 truncate max-w-[120px] sm:max-w-[200px]">
+                                                {s.player.name} {s.player.lastName?.charAt(0)}.
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                            {s.team && <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${s.team === 'A' ? 'bg-blue-400' : 'bg-red-400'}`}></div>}
+                                            <span className="text-pitch-400 font-bold text-[10px] sm:text-sm">⚽ {s.count}</span>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p className="text-stone-500 text-[10px] sm:text-sm text-center py-2">Nadie anotó en este encuentro.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            );
+        }
+
+        function MatchBoardSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin }) {
+            if (!currentMatch) return null;
+
+            const isCompleted = currentMatch.status === 'completed';
+            const attendeesMap = currentMatch.attendees || {};
+            const teamsMap = currentMatch.teams || {};
+            const goalsList = currentMatch.goals || [];
+
+            const convocadosList = computedPlayers.filter(p => attendeesMap[p.id] && attendeesMap[p.id] !== 'none');
+            const teamA = convocadosList.filter(p => teamsMap[p.id] === 'A');
+            const teamB = convocadosList.filter(p => teamsMap[p.id] === 'B');
+            const unassigned = convocadosList.filter(p => !teamsMap[p.id]);
+
+            const scoreA = goalsList.filter(g => g.team === 'A').length;
+            const scoreB = goalsList.filter(g => g.team === 'B').length;
+
+            const handleAssignTeam = (playerId, team) => {
+                if (isCompleted || !isAdmin) return;
+                const newTeams = { ...teamsMap };
+                if (!team) delete newTeams[playerId];
+                else newTeams[playerId] = team;
+                updateCurrentMatch({ ...currentMatch, teams: newTeams });
+            };
+
+            const handleAddGoal = (playerId, team) => {
+                if (isCompleted || !isAdmin) return;
+                const newGoals = [...goalsList, { id: Date.now().toString(), playerId, team }];
+                updateCurrentMatch({ ...currentMatch, goals: newGoals });
+            };
+
+            const handleRemoveGoal = (goalId) => {
+                if (isCompleted || !isAdmin) return;
+                const newGoals = goalsList.filter(g => g.id !== goalId);
+                updateCurrentMatch({ ...currentMatch, goals: newGoals });
+            };
+
+            return (
+                <section className="bg-stone-800 rounded-2xl p-3 sm:p-6 shadow-xl border border-stone-700/50">
+                    <h2 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2 mb-4 sm:mb-6">
+                        <i className="ph-fill ph-chalkboard-teacher text-blue-400"></i> Pizarra {isCompleted && '(Final)'}
+                    </h2>
+
+                    <div className="grid grid-cols-2 gap-2 sm:gap-6">
+                        <div className="bg-stone-900 border border-blue-900/50 rounded-xl p-2 sm:p-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start mb-2 sm:mb-4 gap-1">
+                                <h3 className="font-bold text-blue-400 text-[10px] sm:text-lg text-center">Azul (A)</h3>
+                                <span className="text-xl sm:text-2xl font-black text-white">{scoreA}</span>
+                            </div>
+                            <div className="space-y-1 sm:space-y-2 min-h-[80px] sm:min-h-[100px]">
+                                {teamA.map(p => {
+                                    const pGoals = goalsList.filter(g => g.playerId === p.id && g.team === 'A');
+                                    return (
+                                        <div key={p.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-stone-800 p-1.5 sm:p-2 rounded gap-1 sm:gap-0">
+                                            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                                                <span className="text-stone-300 text-[10px] sm:text-sm truncate max-w-[80px] sm:max-w-none">{p.name} {p.lastName?.charAt(0)}.</span>
+                                                {pGoals.length > 0 && <span className="text-[9px] sm:text-xs text-pitch-400 font-bold">⚽x{pGoals.length}</span>}
+                                            </div>
+                                            <div className="flex gap-1 w-full sm:w-auto justify-end">
+                                                {isAdmin && !isCompleted && <button onClick={() => handleAddGoal(p.id, 'A')} className="text-pitch-400 bg-pitch-900/30 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[9px] sm:text-xs">+ Gol</button>}
+                                                {isAdmin && !isCompleted && <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 px-1 sm:px-2"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="bg-stone-900 border border-red-900/50 rounded-xl p-2 sm:p-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start mb-2 sm:mb-4 gap-1">
+                                <h3 className="font-bold text-red-400 text-[10px] sm:text-lg text-center">Rojo (B)</h3>
+                                <span className="text-xl sm:text-2xl font-black text-white">{scoreB}</span>
+                            </div>
+                            <div className="space-y-1 sm:space-y-2 min-h-[80px] sm:min-h-[100px]">
+                                {teamB.map(p => {
+                                    const pGoals = goalsList.filter(g => g.playerId === p.id && g.team === 'B');
+                                    return (
+                                        <div key={p.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-stone-800 p-1.5 sm:p-2 rounded gap-1 sm:gap-0">
+                                            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                                                <span className="text-stone-300 text-[10px] sm:text-sm truncate max-w-[80px] sm:max-w-none">{p.name} {p.lastName?.charAt(0)}.</span>
+                                                {pGoals.length > 0 && <span className="text-[9px] sm:text-xs text-pitch-400 font-bold">⚽x{pGoals.length}</span>}
+                                            </div>
+                                            <div className="flex gap-1 w-full sm:w-auto justify-end">
+                                                {isAdmin && !isCompleted && <button onClick={() => handleAddGoal(p.id, 'B')} className="text-pitch-400 bg-pitch-900/30 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[9px] sm:text-xs">+ Gol</button>}
+                                                {isAdmin && !isCompleted && <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 px-1 sm:px-2"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {!isCompleted && unassigned.length > 0 && (
+                        <div className="mt-6 pt-4 border-t border-stone-700">
+                            <h4 className="text-stone-400 font-medium mb-3 text-sm">Jugadores sin equipo:</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {unassigned.map(p => (
+                                    <div key={p.id} className="bg-stone-900 border border-stone-700 px-3 py-1.5 rounded-full flex items-center gap-2 text-sm">
+                                        <span className="text-stone-300">{p.name} {p.lastName?.charAt(0)}.</span>
+                                        {isAdmin && (
+                                            <div className="flex gap-1 border-l border-stone-700 pl-2">
+                                                <button onClick={() => handleAssignTeam(p.id, 'A')} className="text-blue-400 font-bold px-1 hover:bg-blue-900/30 rounded">A</button>
+                                                <button onClick={() => handleAssignTeam(p.id, 'B')} className="text-red-400 font-bold px-1 hover:bg-red-900/30 rounded">B</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </section>
+            );
+        }
+
+        function LeaderboardSection({ computedPlayers, isAdmin }) {
+            const [sortBy, setSortBy] = useState('asistencia');
+
+            const rankedPlayers = computedPlayers.map(p => {
+                const percentage = p.attendancePerc || 0;
+                let tier = 'C', tierColor = 'text-stone-400', tierBg = 'bg-stone-400/10 border-stone-400/20';
+                
+                if (percentage >= 75) { tier = 'S'; tierColor = 'text-pitch-400'; tierBg = 'bg-pitch-400/10 border-pitch-400/20'; }
+                else if (percentage >= 50) { tier = 'A'; tierColor = 'text-blue-400'; tierBg = 'bg-blue-400/10 border-blue-400/20'; }
+                else if (percentage >= 25) { tier = 'B'; tierColor = 'text-gold'; tierBg = 'bg-gold/10 border-gold/20'; }
+                else { tier = 'C'; tierColor = 'text-red-400'; tierBg = 'bg-red-400/10 border-red-400/20'; }
+
+                return { ...p, tier, tierColor, tierBg };
+            });
+
+            const sortedPlayers = [...rankedPlayers].sort((a, b) => {
+                if (sortBy === 'asistencia') return b.attendancePerc - a.attendancePerc;
+                if (sortBy === 'victorias') return b.winPerc - a.winPerc;
+                if (sortBy === 'goles') return b.totalGoals - a.totalGoals;
+                if (sortBy === 'alfabetico') return (a.name || '').localeCompare(b.name || '');
+                if (sortBy === 'posicion') return (a.position || '').localeCompare(b.position || '');
+                return 0;
+            });
+
+            return (
+                <section className="bg-stone-800 rounded-2xl p-3 sm:p-6 shadow-xl border border-stone-700/50">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                            <i className="ph-fill ph-ranking text-gold"></i> Ranking Oficial
+                        </h2>
+                        <div className="flex items-center gap-2 bg-stone-900 border border-stone-600 rounded-lg p-1 w-full sm:w-auto">
+                            <i className="ph-fill ph-funnel text-stone-400 pl-2"></i>
+                            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-stone-900 text-sm text-white p-2 outline-none w-full cursor-pointer rounded-md">
+                                <option className="bg-stone-900 text-white" value="asistencia">Porcentaje de Asistencia</option>
+                                <option className="bg-stone-900 text-white" value="victorias">Porcentaje de Victorias</option>
+                                <option className="bg-stone-900 text-white" value="goles">Cantidad de Goles</option>
+                                <option className="bg-stone-900 text-white" value="alfabetico">Orden Alfabético</option>
+                                <option className="bg-stone-900 text-white" value="posicion">Por Posición en Campo</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5 sm:gap-4 mb-6">
+                        <div className="bg-stone-900 p-1 sm:p-3 rounded-xl border border-stone-700 text-center flex flex-col justify-center"><span className="text-sm sm:text-2xl font-black text-pitch-400 block sm:mb-1">Tier S</span><span className="text-[8px] sm:text-xs text-stone-400">100%-75%</span></div>
+                        <div className="bg-stone-900 p-1 sm:p-3 rounded-xl border border-stone-700 text-center flex flex-col justify-center"><span className="text-sm sm:text-2xl font-black text-blue-400 block sm:mb-1">Tier A</span><span className="text-[8px] sm:text-xs text-stone-400">74%-50%</span></div>
+                        <div className="bg-stone-900 p-1 sm:p-3 rounded-xl border border-stone-700 text-center flex flex-col justify-center"><span className="text-sm sm:text-2xl font-black text-gold block sm:mb-1">Tier B</span><span className="text-[8px] sm:text-xs text-stone-400">49%-25%</span></div>
+                        <div className="bg-stone-900 p-1 sm:p-3 rounded-xl border border-stone-700 text-center flex flex-col justify-center"><span className="text-sm sm:text-2xl font-black text-red-400 block sm:mb-1">Tier C</span><span className="text-[8px] sm:text-xs text-stone-400">&lt;25%</span></div>
+                    </div>
+
+                    <div className="w-full overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-stone-700 text-stone-400 text-[9px] sm:text-sm uppercase tracking-wide">
+                                    <th className="p-1 sm:p-3 font-semibold w-6 sm:w-12 text-center">#</th>
+                                    <th className="p-1 sm:p-3 font-semibold">Chocolatero</th>
+                                    <th className="p-1 sm:p-3 font-semibold text-center w-8 sm:w-auto">Pos</th>
+                                    <th className="p-1 sm:p-3 font-semibold text-center w-10 sm:w-auto">Tier</th>
+                                    <th className="p-1 sm:p-3 font-semibold text-center w-8 sm:w-auto" title="Goles Totales">Gol</th>
+                                    <th className="p-1 sm:p-3 font-semibold text-center w-10 sm:w-auto" title="% de Partidos Ganados">Win%</th>
+                                    <th className="p-1 sm:p-3 font-semibold text-right w-10 sm:w-auto">% ASIS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sortedPlayers.map((player, index) => (
+                                    <tr key={player.id} className="border-b border-stone-700/50 hover:bg-stone-700/20 transition-colors">
+                                        <td className="p-1 sm:p-3 text-center">
+                                            <span className={`inline-flex items-center justify-center w-4 h-4 sm:w-6 sm:h-6 rounded-full text-[10px] sm:text-xs font-bold ${index < 3 && sortBy==='asistencia' ? 'bg-gold/20 text-gold' : 'text-stone-500'}`}>{index + 1}</span>
+                                        </td>
+                                        <td className="p-1 sm:p-3">
+                                            <div className="flex items-center gap-1 sm:gap-2">
+                                                <PlayerAvatar player={player} className="w-8 h-8 text-xs hidden sm:flex" />
+                                                <span className="font-semibold text-stone-200 text-[11px] sm:text-base truncate max-w-[75px] sm:max-w-none block">{formatPlayerName(player, true)}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-1 sm:p-3 text-center">
+                                            {player.position ? <span className="text-[8px] sm:text-[10px] font-bold text-stone-400 bg-stone-800 px-1 py-0.5 sm:px-2 sm:py-1 rounded">{player.position}</span> : '-'}
+                                        </td>
+                                        <td className="p-1 sm:p-3 text-center">
+                                            <span className={`inline-block px-1 py-0.5 sm:px-3 sm:py-1 rounded border ${player.tierBg} ${player.tierColor} font-black text-[9px] sm:text-sm w-full sm:w-12 text-center`}>{player.tier}</span>
+                                        </td>
+                                        <td className="p-1 sm:p-3 text-center font-bold text-stone-300 text-[11px] sm:text-base">
+                                            {player.totalGoals}
+                                        </td>
+                                        <td className="p-1 sm:p-3 text-center text-[10px] sm:text-sm font-semibold text-blue-300">
+                                            {player.winPerc.toFixed(0)}%
+                                        </td>
+                                        <td className="p-1 sm:p-3 text-right">
+                                            <span className={`font-bold text-[10px] sm:text-base ${player.tierColor}`}>{player.attendancePerc.toFixed(0)}%</span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            );
+        }
+
+        function AdminPanel({ dbState, updateState, computedPlayers, handleExportDB, handleImportDB }) {
+            const [filterTag, setFilterTag] = useState('all');
+            const [isAddingPlayer, setIsAddingPlayer] = useState(false);
+            const [editingPlayerId, setEditingPlayerId] = useState(null);
+            const [playerForm, setPlayerForm] = useState({ name: '', lastName: '', alias: '', phone: '', photoUrl: '', username: '', password: '', baseMatches: 0, basePoints: 0, baseGoals: 0, baseWins: 0, position: '' });
+            const [playerToDelete, setPlayerToDelete] = useState(null);
+            const [formError, setFormError] = useState("");
+            const [cropFile, setCropFile] = useState(null);
+
+            const players = dbState?.players || [];
+            
+            // Computar Etiquetas (Tags) para cada jugador
+            const playersWithTags = computedPlayers.map(p => {
+                let tags = [];
+                if (!p.name) tags.push({id: 'missing_name', label: 'Falta Nombre', color: 'bg-red-900/40 text-red-300 border-red-700/50'});
+                if (!p.lastName) tags.push({id: 'missing_lastName', label: 'Falta Apellido', color: 'bg-amber-900/40 text-amber-300 border-amber-700/50'});
+                if (!p.phone) tags.push({id: 'missing_phone', label: 'Falta Celular', color: 'bg-orange-900/40 text-orange-300 border-orange-700/50'});
+                if (!p.username) tags.push({id: 'missing_user', label: 'Falta Usuario', color: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50'});
+                if (!p.password) tags.push({id: 'missing_pass', label: 'Falta Clave', color: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50'});
+                
+                if (tags.length === 0) tags.push({id: 'complete', label: 'Datos Completos', color: 'bg-pitch-900/40 text-pitch-400 border-pitch-700/50'});
+                return { ...p, tags };
+            });
+
+            // Filtrar Lista según Etiqueta Seleccionada
+            const filteredPlayers = filterTag === 'all' 
+                ? playersWithTags 
+                : playersWithTags.filter(p => p.tags.some(t => t.id === filterTag));
+
+            const handleSavePlayer = () => {
+                if (!playerForm.name) {
+                    setFormError("⚠️ El Nombre es obligatorio.");
+                    return;
+                }
+                if (playerForm.username) {
+                    const isDuplicate = players.some(p => p.username === playerForm.username && p.id !== editingPlayerId);
+                    if(isDuplicate) {
+                        setFormError("⚠️ Este nombre de usuario ya está en uso.");
+                        return;
+                    }
+                }
+
+                setFormError("");
+                const newPlayers = [...players];
+                if (editingPlayerId) {
+                    const idx = newPlayers.findIndex(p => p.id === editingPlayerId);
+                    if (idx !== -1) newPlayers[idx] = { ...newPlayers[idx], ...playerForm };
+                } else {
+                    newPlayers.push({
+                        id: Date.now().toString(),
+                        ...playerForm,
+                        baseMatches: Number(playerForm.baseMatches) || 0,
+                        basePoints: Number(playerForm.basePoints) || 0,
+                        baseGoals: Number(playerForm.baseGoals) || 0,
+                        baseWins: Number(playerForm.baseWins) || 0
+                    });
+                }
+                updateState({ ...dbState, players: newPlayers });
+                setIsAddingPlayer(false);
+                setEditingPlayerId(null);
+            };
+
+            const confirmDeletePlayer = () => {
+                if (!playerToDelete) return;
+                updateState({
+                    ...dbState,
+                    players: players.filter(p => p.id !== playerToDelete),
+                });
+                setPlayerToDelete(null);
+            };
+
+            const editPlayer = (pId) => { 
+                const rawP = players.find(x => x.id === pId);
+                setPlayerForm({...rawP}); 
+                setEditingPlayerId(pId); 
+                setIsAddingPlayer(true); 
+            };
+
+            return (
+                <section className="bg-stone-800 border-2 border-choco-600 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-choco-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">MODO ADMIN</div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-6 mt-2"><i className="ph-fill ph-database text-choco-400"></i> Base de Datos</h2>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="bg-stone-900 rounded-xl p-5 border border-stone-700 flex flex-col justify-between">
+                            <div>
+                                <h3 className="text-white font-semibold mb-2 flex items-center gap-2"><i className="ph-fill ph-files"></i> Respaldos</h3>
+                                <p className="text-sm text-stone-400 mb-4">Exporta o importa toda la base de datos.</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={handleExportDB} className="flex-1 bg-stone-700 hover:bg-stone-600 py-2 rounded-lg text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2"><i className="ph ph-download-simple"></i> Exportar</button>
+                                <label className="flex-1 bg-choco-700 hover:bg-choco-600 cursor-pointer py-2 rounded-lg text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">
+                                    <i className="ph ph-upload-simple"></i> Importar <input type="file" accept=".json" className="hidden" onChange={handleImportDB} />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="bg-stone-900 rounded-xl p-5 border border-stone-700">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3 border-b border-stone-800 pb-3">
+                                <h3 className="text-white font-semibold">Registrados: <span className="text-pitch-400">{filteredPlayers.length}</span></h3>
+                                <div className="flex gap-2 w-full sm:w-auto">
+                                    <select value={filterTag} onChange={e => setFilterTag(e.target.value)} className="bg-stone-800 border border-stone-600 rounded p-1.5 text-xs text-white outline-none flex-1">
+                                        <option value="all">Todas las etiquetas</option>
+                                        <option value="complete">✅ Datos Completos</option>
+                                        <option value="missing_name">❌ Falta Nombre</option>
+                                        <option value="missing_lastName">❌ Falta Apellido</option>
+                                        <option value="missing_phone">❌ Falta Celular</option>
+                                        <option value="missing_user">❌ Falta Usuario</option>
+                                        <option value="missing_pass">❌ Falta Clave</option>
+                                    </select>
+                                    <button onClick={() => { setPlayerForm({name:'', lastName:'', alias:'', phone:'', photoUrl:'', username:'', password:'', baseMatches:0, basePoints:0, baseGoals:0, baseWins:0, position:''}); setEditingPlayerId(null); setIsAddingPlayer(true); }} className="bg-pitch-600 hover:bg-pitch-500 text-white text-xs px-3 py-1.5 rounded font-bold transition-colors shrink-0">
+                                        + Añadir
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                {filteredPlayers.map(p => (
+                                    <div key={p.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-stone-800 p-3 rounded-lg border border-stone-700 gap-2">
+                                        <div className="flex items-center gap-3">
+                                            <PlayerAvatar player={p} className="w-8 h-8 text-xs shrink-0" />
+                                            <div>
+                                                <span className="font-medium text-stone-200 block">{formatPlayerName(p, true)}</span>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {p.tags.map(t => <span key={t.id} className={`text-[9px] px-1.5 py-0.5 rounded border ${t.color}`}>{t.label}</span>)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 shrink-0 self-end sm:self-auto">
+                                            <button onClick={() => editPlayer(p.id)} className="text-stone-400 hover:text-white transition-colors bg-stone-700 hover:bg-stone-600 p-1.5 rounded"><i className="ph ph-pencil-simple"></i></button>
+                                            <button onClick={() => setPlayerToDelete(p.id)} className="text-red-400 hover:text-red-300 transition-colors bg-red-900/30 hover:bg-red-900/60 p-1.5 rounded"><i className="ph ph-trash"></i></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <Modal isOpen={isAddingPlayer} onClose={() => { setIsAddingPlayer(false); setFormError(""); }} title={editingPlayerId ? "Editar Chocolatero" : "Nuevo Chocolatero"}>
+                        <div className="space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
+                            {formError && <div className="bg-red-900/20 text-red-400 text-sm p-3 rounded-lg border border-red-700/50">{formError}</div>}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-sm text-stone-400 mb-1">Nombre *</label><input type="text" value={playerForm.name} onChange={e => setPlayerForm({...playerForm, name: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Apellido</label><input type="text" value={playerForm.lastName} onChange={e => setPlayerForm({...playerForm, lastName: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-sm text-stone-400 mb-1">Alias (Apodo)</label><input type="text" value={playerForm.alias} onChange={e => setPlayerForm({...playerForm, alias: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Celular / WA</label><input type="text" value={playerForm.phone} onChange={e => setPlayerForm({...playerForm, phone: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm text-stone-400 mb-1">Posición Frecuente</label>
+                                    <select value={playerForm.position} onChange={e => setPlayerForm({...playerForm, position: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none text-sm">
+                                        <option value="">No definida</option>
+                                        <option value="ARQ">Arquero (ARQ)</option>
+                                        <option value="DEF">Defensa (DEF)</option>
+                                        <option value="MED">Medio (MED)</option>
+                                        <option value="DEL">Delantero (DEL)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-stone-400 mb-1">Foto de Perfil</label>
+                                    <div className="flex items-center gap-2">
+                                        {playerForm.photoUrl && <img src={playerForm.photoUrl} className="w-8 h-8 rounded-full object-cover shrink-0" />}
+                                        <input type="file" accept="image/*" onChange={e => { if(e.target.files[0]) setCropFile(e.target.files[0]); e.target.value = ''; }} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-1.5 text-white outline-none text-xs cursor-pointer file:hidden" />
+                                        {playerForm.photoUrl && <button onClick={() => setPlayerForm({...playerForm, photoUrl: ''})} className="text-red-400 hover:text-red-300 p-1"><i className="ph ph-trash"></i></button>}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-stone-900/50 p-3 rounded-lg border border-stone-700 mt-2">
+                                <p className="text-sm text-pitch-400 font-bold mb-2">Credenciales (Opcional)</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div><label className="block text-xs text-stone-400 mb-1">Usuario</label><input type="text" value={playerForm.username} onChange={e => setPlayerForm({...playerForm, username: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none text-sm" /></div>
+                                    <div><label className="block text-xs text-stone-400 mb-1">Contraseña</label><input type="text" value={playerForm.password} onChange={e => setPlayerForm({...playerForm, password: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none text-sm" /></div>
+                                </div>
+                            </div>
+                            <div className="bg-stone-900/30 p-3 rounded-lg border border-stone-700 mt-2">
+                                <p className="text-xs text-stone-400 mb-2 font-semibold">Estadísticas Base (Importadas externamente). El sistema sumará a esto los partidos jugados en esta app automáticamente.</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    <div><label className="block text-[10px] text-stone-400 mb-1">P. Jugados</label><input type="number" value={playerForm.baseMatches} onChange={e => setPlayerForm({...playerForm, baseMatches: Number(e.target.value)})} className="w-full bg-stone-900 border border-stone-700 rounded p-1 text-white text-xs text-center outline-none" /></div>
+                                    <div><label className="block text-[10px] text-stone-400 mb-1">Ptos Asist.</label><input type="number" step="0.5" value={playerForm.basePoints} onChange={e => setPlayerForm({...playerForm, basePoints: Number(e.target.value)})} className="w-full bg-stone-900 border border-stone-700 rounded p-1 text-white text-xs text-center outline-none" /></div>
+                                    <div><label className="block text-[10px] text-stone-400 mb-1">Goles</label><input type="number" value={playerForm.baseGoals} onChange={e => setPlayerForm({...playerForm, baseGoals: Number(e.target.value)})} className="w-full bg-stone-900 border border-stone-700 rounded p-1 text-white text-xs text-center outline-none" /></div>
+                                    <div><label className="block text-[10px] text-stone-400 mb-1">P. Ganados</label><input type="number" value={playerForm.baseWins} onChange={e => setPlayerForm({...playerForm, baseWins: Number(e.target.value)})} className="w-full bg-stone-900 border border-stone-700 rounded p-1 text-white text-xs text-center outline-none" /></div>
+                                </div>
+                            </div>
+                            <button onClick={handleSavePlayer} className="w-full bg-pitch-600 hover:bg-pitch-500 py-3 rounded-lg text-white font-bold mt-4 transition-colors sticky bottom-0">Guardar Chocolatero</button>
+                        </div>
+                    </Modal>
+
+                    <Modal isOpen={!!playerToDelete} onClose={() => setPlayerToDelete(null)} title="Eliminar Chocolatero">
+                        <div className="space-y-4">
+                            <div className="bg-red-900/20 p-4 rounded-lg border border-red-700/50">
+                                <p className="text-stone-300 text-sm leading-relaxed">¿Seguro que deseas eliminar a este chocolatero de la base de datos?</p>
+                                <p className="text-red-400 text-sm font-semibold mt-2">¡Se perderá todo su historial de partidos y asistencias!</p>
+                            </div>
+                            <div className="flex gap-3 mt-4">
+                                <button onClick={() => setPlayerToDelete(null)} className="flex-1 bg-stone-700 hover:bg-stone-600 py-3 rounded-lg text-white font-semibold transition-colors">Cancelar</button>
+                                <button onClick={confirmDeletePlayer} className="flex-1 bg-red-600 hover:bg-red-500 py-3 rounded-lg text-white font-semibold shadow-lg shadow-red-900/50 transition-colors">Sí, Eliminar</button>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {cropFile && <ImageCropperModal file={cropFile} onCropped={(dataUrl) => { setPlayerForm({...playerForm, photoUrl: dataUrl}); setCropFile(null); }} onCancel={() => setCropFile(null)} />}
+                </section>
+            );
+        }
+
+        function App() {
+            const [dbState, setDbState] = useState(initialDB);
+            const [user, setUser] = useState(null);
+            const [isSyncing, setIsSyncing] = useState(true);
+            
+            // Match Selector State
+            const [selectedMatchId, setSelectedMatchId] = useState(null);
+            
+            // Roles y Sesión
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [loggedPlayerId, setLoggedPlayerId] = useState(null);
+            
+            // Modales
+            const [showLogin, setShowLogin] = useState(false);
+            const [loginUser, setLoginUser] = useState('');
+            const [loginPass, setLoginPass] = useState('');
+            const [loginError, setLoginError] = useState('');
+            
+            const [showAdminConfig, setShowAdminConfig] = useState(false);
+            const [adminConfigForm, setAdminConfigForm] = useState({ username: '', password: '' });
+
+            const [showProfileConfig, setShowProfileConfig] = useState(false);
+            const [playerConfigForm, setPlayerConfigForm] = useState({});
+            const [profileCropFile, setProfileCropFile] = useState(null);
+
+            useEffect(() => {
+                const initApp = async () => {
+                    if (!window.firebaseVars) { setTimeout(initApp, 100); return; }
+                    const { auth, signInWithCustomToken, signInAnonymously } = window.firebaseVars;
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined') await signInWithCustomToken(auth, __initial_auth_token);
+                        else await signInAnonymously(auth);
+                        setUser(auth.currentUser);
+                    } catch (e) { console.error("Auth error", e); }
+                };
+                initApp();
+            }, []);
+
+            useEffect(() => {
+                if (!user || !window.firebaseVars) return;
+                const { db, doc, onSnapshot, appId, setDoc } = window.firebaseVars;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_state', 'current');
+                const unsubscribe = onSnapshot(docRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        let data = snapshot.data();
+                        // Migración rápida si el esquema es antiguo
+                        if (data.match && !data.matches) {
+                            data.matches = [{ id: Date.now().toString(), ...data.match, status: 'upcoming' }];
+                            delete data.match;
+                            setDoc(docRef, data);
+                        }
+                        setDbState(data);
+                    }
+                    else setDoc(docRef, initialDB);
+                    setIsSyncing(false);
+                }, (err) => { console.error(err); setIsSyncing(false); });
+                return () => unsubscribe();
+            }, [user]);
+
+            // Set initial selected match
+            useEffect(() => {
+                if (dbState.matches && dbState.matches.length > 0) {
+                    const isValid = dbState.matches.some(m => m.id === selectedMatchId);
+                    if (!selectedMatchId || !isValid) {
+                        const upcoming = dbState.matches.find(m => m.status === 'upcoming');
+                        if (upcoming) {
+                            setSelectedMatchId(upcoming.id);
+                        } else {
+                            // Sort by date to get the latest match
+                            const latest = [...dbState.matches].sort((a,b) => b.date.localeCompare(a.date))[0];
+                            if (latest) setSelectedMatchId(latest.id);
+                        }
+                    }
+                } else if (dbState.matches && dbState.matches.length === 0) {
+                    setSelectedMatchId(null);
+                }
+            }, [dbState.matches, selectedMatchId]);
+
+            const updateState = async (newState) => {
+                setDbState(newState);
+                if (!user || !window.firebaseVars) return;
+                const { db, doc, setDoc, appId } = window.firebaseVars;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_state', 'current');
+                try { await setDoc(docRef, newState); } catch (e) { console.error(e); }
+            };
+
+            const updateCurrentMatch = (updatedMatch) => {
+                const newMatches = dbState.matches.map(m => m.id === updatedMatch.id ? updatedMatch : m);
+                updateState({ ...dbState, matches: newMatches });
+            };
+
+            const createNewMatch = () => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const newMatch = {
+                    id: Date.now().toString(),
+                    date: todayStr,
+                    startTime: "20:00",
+                    endTime: "22:00",
+                    location: "Cancha El Golazo",
+                    mapUrl: "",
+                    quota: 11.50,
+                    deadlineDate: todayStr,
+                    deadlineTime: "18:00",
+                    status: "upcoming",
+                    attendees: {},
+                    teams: {},
+                    goals: []
+                };
+                updateState({ ...dbState, matches: [newMatch, ...(dbState.matches || [])] });
+                setSelectedMatchId(newMatch.id);
+            };
+
+            const deleteMatch = (matchId) => {
+                const newMatches = dbState.matches.filter(m => m.id !== matchId);
+                updateState({ ...dbState, matches: newMatches });
+                if (selectedMatchId === matchId) {
+                    if (newMatches.length > 0) {
+                        const upcoming = newMatches.find(m => m.status === 'upcoming');
+                        if (upcoming) {
+                            setSelectedMatchId(upcoming.id);
+                        } else {
+                            const latest = [...newMatches].sort((a,b) => b.date.localeCompare(a.date))[0];
+                            setSelectedMatchId(latest.id);
+                        }
+                    } else {
+                        setSelectedMatchId(null);
+                    }
+                }
+            };
+
+            // CORE LOGIC: Cálculo de Estadísticas Dinámicas
+            const computedPlayers = useMemo(() => {
+                const players = dbState.players || [];
+                const matches = dbState.matches || [];
+
+                return players.map(p => {
+                    let computedMatches = p.baseMatches || 0;
+                    let points = p.basePoints || 0;
+                    let goals = p.baseGoals || 0;
+                    let wins = p.baseWins || 0;
+                    let teamMatches = 0; 
+
+                    matches.forEach(m => {
+                        if (m.status === 'completed') {
+                            const status = m.attendees?.[p.id];
+                            if (status === 'full') { computedMatches += 1; points += 1; }
+                            else if (status === 'half') { computedMatches += 1; points += 0.5; }
+                            else if (status === 'absent') { computedMatches += 1; points += 0; }
+                            
+                            const pGoals = (m.goals || []).filter(g => g.playerId === p.id).length;
+                            goals += pGoals;
+
+                            const team = m.teams?.[p.id];
+                            if (team && (status === 'full' || status === 'half' || status === 'free')) {
+                                teamMatches += 1;
+                                const scoreA = (m.goals || []).filter(g => g.team === 'A').length;
+                                const scoreB = (m.goals || []).filter(g => g.team === 'B').length;
+                                if ((team === 'A' && scoreA > scoreB) || (team === 'B' && scoreB > scoreA)) wins += 1;
+                            }
+                        }
+                    });
+
+                    const attendancePerc = computedMatches > 0 ? (points / computedMatches) * 100 : 0;
+                    const winPerc = teamMatches > 0 ? (wins / teamMatches) * 100 : 0;
+
+                    return { ...p, computedMatches, points, totalGoals: goals, wins, teamMatches, attendancePerc, winPerc };
+                });
+            }, [dbState.players, dbState.matches]);
+
+
+            const handleLogin = () => {
+                const adminCreds = dbState.adminCredentials || { username: 'admin', password: '1234' };
+                if (loginUser === adminCreds.username && loginPass === adminCreds.password) {
+                    setIsAdmin(true); setLoggedPlayerId(null);
+                    setShowLogin(false); setLoginUser(''); setLoginPass(''); setLoginError('');
+                } else {
+                    const player = dbState.players.find(p => p.username === loginUser && p.password === loginPass);
+                    if (player) {
+                        setIsAdmin(false); setLoggedPlayerId(player.id);
+                        setShowLogin(false); setLoginUser(''); setLoginPass(''); setLoginError('');
+                    } else {
+                        setLoginError('Usuario o contraseña incorrectos');
+                    }
+                }
+            };
+
+            const handleLogout = () => { setIsAdmin(false); setLoggedPlayerId(null); };
+
+            useEffect(() => { if (showAdminConfig) setAdminConfigForm(dbState.adminCredentials || { username: 'admin', password: '1234' }); }, [showAdminConfig, dbState.adminCredentials]);
+            useEffect(() => {
+                if (showProfileConfig && loggedPlayerId) {
+                    const p = computedPlayers.find(x => x.id === loggedPlayerId);
+                    if (p) setPlayerConfigForm(p);
+                }
+            }, [showProfileConfig, loggedPlayerId, computedPlayers]);
+
+            const handleSaveAdminConfig = () => { updateState({ ...dbState, adminCredentials: adminConfigForm }); setShowAdminConfig(false); };
+            const handleSavePlayerProfile = () => {
+                const newPlayers = dbState.players.map(p => p.id === loggedPlayerId ? { ...p, ...playerConfigForm } : p);
+                updateState({ ...dbState, players: newPlayers });
+                setShowProfileConfig(false);
+            };
+
+            const handleExportDB = () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dbState, null, 2));
+                const a = document.createElement('a');
+                a.setAttribute("href", dataStr);
+                a.setAttribute("download", `pichanga_db_${new Date().toISOString().split('T')[0]}.json`);
+                document.body.appendChild(a); a.click(); a.remove();
+            };
+
+            const handleImportDB = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const newDb = JSON.parse(e.target.result);
+                        if(newDb.players && (newDb.match || newDb.matches)) updateState(newDb);
+                    } catch (err) { console.error(err); }
+                };
+                reader.readAsText(file);
+                event.target.value = null;
+            };
+
+            if (isSyncing) {
+                return (
+                    <div className="min-h-screen bg-stone-900 flex items-center justify-center">
+                        <div className="text-center"><i className="ph-fill ph-soccer-ball text-6xl text-pitch-500 animate-spin mb-4 block"></i><p className="text-pitch-400 font-bold animate-pulse">Sincronizando...</p></div>
+                    </div>
+                );
+            }
+
+            const currentMatch = dbState.matches?.find(m => m.id === selectedMatchId);
+            
+            // Historial personal para el Modal del Perfil
+            const myHistory = dbState.matches?.filter(m => m.status === 'completed' && m.attendees?.[loggedPlayerId]).map(m => {
+                const st = m.attendees[loggedPlayerId];
+                const g = (m.goals || []).filter(x => x.playerId === loggedPlayerId).length;
+                const t = m.teams?.[loggedPlayerId];
+                let won = false;
+                if (t) {
+                    const sA = (m.goals||[]).filter(x => x.team==='A').length; const sB = (m.goals||[]).filter(x => x.team==='B').length;
+                    if ((t==='A' && sA>sB) || (t==='B' && sB>sA)) won = true;
+                }
+                return { match: m, status: st, goals: g, team: t, won };
+            }) || [];
+
+            return (
+                <div className="min-h-screen pb-12 font-sans selection:bg-pitch-500 selection:text-white">
+                    <header className="bg-stone-900 border-b border-stone-800 sticky top-0 z-40 shadow-sm">
+                        <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
+                                <div className="bg-gradient-to-br from-pitch-500 to-pitch-700 p-2.5 rounded-xl text-white shadow-lg shadow-pitch-900/50 border border-pitch-400/30 shrink-0">
+                                    <i className="ph-fill ph-soccer-ball text-2xl"></i>
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold text-choco-200 tracking-tight leading-tight">Pichanga Chocolatera</h1>
+                                    <p className="text-xs text-pitch-400 font-medium">Gestor de Asistencias Oficial</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-center">
+                                {!isAdmin && !loggedPlayerId && (
+                                    <button onClick={() => setShowLogin(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors bg-stone-800 text-stone-300 hover:text-white hover:bg-stone-700 border border-stone-700 shadow-sm">
+                                        <i className="ph-fill ph-sign-in text-lg"></i> <span>Ingresar</span>
+                                    </button>
+                                )}
+                                {loggedPlayerId && (
+                                    <button onClick={() => setShowProfileConfig(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors bg-pitch-900/50 text-pitch-400 border border-pitch-700 hover:bg-pitch-800 shadow-sm">
+                                        <i className="ph-fill ph-user text-lg"></i> <span className="whitespace-nowrap">Mi Perfil</span>
+                                    </button>
+                                )}
+                                {isAdmin && (
+                                    <button onClick={() => setShowAdminConfig(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors bg-choco-900/50 text-choco-400 border border-choco-700 hover:bg-choco-800 shadow-sm">
+                                        <i className="ph-fill ph-gear text-lg"></i> <span className="whitespace-nowrap">Admin Config</span>
+                                    </button>
+                                )}
+                                {(isAdmin || loggedPlayerId) && (
+                                    <button onClick={handleLogout} title="Cerrar Sesión" className="flex items-center justify-center px-4 py-3 rounded-lg font-bold transition-colors bg-stone-800 text-stone-400 hover:text-red-300 hover:bg-red-900/50 border border-stone-700">
+                                        <i className="ph-fill ph-sign-out text-xl"></i>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Barra de Selección de Fecha Global */}
+                    <div className="bg-stone-800/80 backdrop-blur-md border-b border-stone-700 py-3 px-4 z-30 sticky top-[73px] sm:top-[73px] shadow-sm">
+                        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+                            <div className="flex items-center gap-2 text-stone-300 font-semibold text-sm">
+                                <i className="ph-fill ph-calendar-check text-xl text-pitch-500"></i> Mostrando Pichanga del:
+                            </div>
+                            <div className="flex w-full sm:w-auto gap-2">
+                                <select value={selectedMatchId || ''} onChange={e => setSelectedMatchId(e.target.value)} className="bg-stone-900 border border-stone-600 rounded-lg p-2.5 text-white outline-none flex-1 font-medium text-sm capitalize">
+                                    {dbState.matches?.sort((a,b) => b.date.localeCompare(a.date)).map(m => (
+                                        <option className="bg-stone-900 text-white" key={m.id} value={m.id}>{formatDateText(m.date) || m.date || 'Fecha por definir'} {m.status==='completed' ? '(Finalizada)' : '(Próxima)'}</option>
+                                    ))}
+                                </select>
+                                {isAdmin && (
+                                    <button onClick={createNewMatch} className="bg-pitch-600 hover:bg-pitch-500 text-white px-3 py-2 rounded-lg font-bold transition-colors shadow-lg shrink-0 flex items-center gap-1 text-sm" title="Programar Nueva Pichanga">
+                                        <i className="ph-bold ph-plus"></i> Nueva
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+                        {(!currentMatch && (!dbState.matches || dbState.matches.length === 0)) && (
+                            <section className="bg-stone-800 rounded-2xl p-6 shadow-xl border border-stone-700/50 text-center">
+                                <i className="ph-fill ph-calendar-blank text-6xl text-stone-600 mb-4 block"></i>
+                                <h2 className="text-xl font-bold text-stone-300 mb-2">No hay pichangas registradas</h2>
+                                <p className="text-stone-500 text-sm mb-6">El administrador aún no ha programado la próxima fecha o no hay historial de partidos.</p>
+                                {isAdmin && (
+                                    <button onClick={createNewMatch} className="bg-pitch-600 hover:bg-pitch-500 text-white px-6 py-3 rounded-lg font-bold transition-colors shadow-lg inline-flex items-center gap-2 justify-center">
+                                        <i className="ph-bold ph-plus"></i> Programar Nueva Pichanga
+                                    </button>
+                                )}
+                            </section>
+                        )}
+                        
+                        {currentMatch?.status === 'completed' && (
+                            <MatchHighlightsSection currentMatch={currentMatch} updateCurrentMatch={updateCurrentMatch} computedPlayers={computedPlayers} isAdmin={isAdmin} loggedPlayerId={loggedPlayerId} />
+                        )}
+
+                        {currentMatch?.status === 'upcoming' && (
+                            <>
+                                <MatchInfoSection currentMatch={currentMatch} updateCurrentMatch={updateCurrentMatch} deleteMatch={deleteMatch} isAdmin={isAdmin} />
+                                <CurrentRosterSection currentMatch={currentMatch} updateCurrentMatch={updateCurrentMatch} computedPlayers={computedPlayers} isAdmin={isAdmin} />
+                            </>
+                        )}
+
+                        {currentMatch?.status === 'completed' && isAdmin && (
+                            <details className="border border-stone-700 rounded-xl bg-stone-900/30 group overflow-hidden shadow-inner">
+                                <summary className="p-4 cursor-pointer text-stone-400 hover:text-white font-bold outline-none flex items-center gap-2 hover:bg-stone-800/50 transition-colors">
+                                    <i className="ph-fill ph-pencil-simple text-pitch-500"></i> Administrar/Editar datos de este partido finalizado
+                                </summary>
+                                <div className="p-4 sm:p-6 space-y-8 border-t border-stone-700">
+                                    <MatchInfoSection currentMatch={currentMatch} updateCurrentMatch={updateCurrentMatch} deleteMatch={deleteMatch} isAdmin={isAdmin} />
+                                    <CurrentRosterSection currentMatch={currentMatch} updateCurrentMatch={updateCurrentMatch} computedPlayers={computedPlayers} isAdmin={isAdmin} />
+                                </div>
+                            </details>
+                        )}
+
+                        {currentMatch && (
+                            <MatchBoardSection currentMatch={currentMatch} updateCurrentMatch={updateCurrentMatch} computedPlayers={computedPlayers} isAdmin={isAdmin} />
+                        )}
+
+                        {isAdmin && <AdminPanel dbState={dbState} updateState={updateState} computedPlayers={computedPlayers} handleExportDB={handleExportDB} handleImportDB={handleImportDB} />}
+                        
+                        <LeaderboardSection computedPlayers={computedPlayers} isAdmin={isAdmin} />
+                    </main>
+
+                    {/* Modal: Login */}
+                    <Modal isOpen={showLogin} onClose={() => {setShowLogin(false); setLoginError('');}} title="Ingresar a la Cancha">
+                        <div className="space-y-4">
+                            <p className="text-stone-400 text-sm">Ingresa con tu usuario y contraseña. Si eres admin, usa tus credenciales maestras.</p>
+                            {loginError && <p className="text-red-400 text-sm font-bold bg-red-900/20 p-2 rounded border border-red-700/50">{loginError}</p>}
+                            <div className="relative mb-3">
+                                <i className="ph ph-user absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-xl"></i>
+                                <input type="text" placeholder="Usuario" value={loginUser} onChange={e => setLoginUser(e.target.value)} className="w-full bg-stone-900 border border-stone-700 rounded-lg py-3 pl-10 pr-3 text-white focus:border-pitch-500 outline-none" />
+                            </div>
+                            <div className="relative">
+                                <i className="ph ph-password absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-xl"></i>
+                                <input type="password" placeholder="Contraseña" value={loginPass} onChange={e => setLoginPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} className="w-full bg-stone-900 border border-stone-700 rounded-lg py-3 pl-10 pr-3 text-white focus:border-pitch-500 outline-none" />
+                            </div>
+                            <button onClick={handleLogin} className="w-full bg-pitch-600 hover:bg-pitch-500 py-3 rounded-lg text-white font-bold transition-colors shadow-lg shadow-pitch-900/50">Ingresar</button>
+                        </div>
+                    </Modal>
+
+                    {/* Modal: Admin Config */}
+                    <Modal isOpen={showAdminConfig} onClose={() => setShowAdminConfig(false)} title="Configuración de Administrador">
+                        <div className="space-y-4">
+                            <p className="text-stone-400 text-sm">Actualiza tus credenciales maestras. ¡No las olvides!</p>
+                            <div><label className="block text-sm text-stone-400 mb-1">Nuevo Usuario Admin</label><input type="text" value={adminConfigForm.username || ''} onChange={e => setAdminConfigForm({...adminConfigForm, username: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                            <div><label className="block text-sm text-stone-400 mb-1">Nueva Contraseña Admin</label><input type="text" value={adminConfigForm.password || ''} onChange={e => setAdminConfigForm({...adminConfigForm, password: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                            <button onClick={handleSaveAdminConfig} className="w-full bg-choco-600 hover:bg-choco-500 py-3 rounded-lg text-white font-bold mt-4 transition-colors">Guardar Credenciales</button>
+                        </div>
+                    </Modal>
+
+                    {/* Modal: Perfil del Jugador con Historial */}
+                    <Modal isOpen={showProfileConfig} onClose={() => setShowProfileConfig(false)} title="Mi Perfil Chocolatero">
+                        <div className="space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar pr-2">
+                            <div className="flex justify-center mb-4 relative">
+                                <PlayerAvatar player={playerConfigForm} className="w-24 h-24 text-3xl shadow-xl" />
+                                <label className="absolute bottom-0 right-1/2 translate-x-12 translate-y-2 bg-pitch-600 hover:bg-pitch-500 text-white p-2 rounded-full cursor-pointer shadow-lg border-2 border-stone-800 transition-colors">
+                                    <i className="ph-fill ph-camera text-lg"></i>
+                                    <input type="file" accept="image/*" onChange={e => { if(e.target.files[0]) setProfileCropFile(e.target.files[0]); e.target.value = ''; }} className="hidden" />
+                                </label>
+                            </div>
+                            <div className="text-center">
+                                {playerConfigForm.photoUrl && <button onClick={() => setPlayerConfigForm({...playerConfigForm, photoUrl: ''})} className="text-xs text-red-400 hover:text-red-300 font-semibold"><i className="ph ph-trash"></i> Eliminar foto actual</button>}
+                            </div>
+                            <div className="bg-stone-900/50 p-4 rounded-xl border border-stone-700 grid grid-cols-3 text-center mb-2">
+                                <div><p className="text-[10px] text-stone-400 uppercase tracking-widest">% Asist</p><p className="text-xl font-black text-pitch-400">{playerConfigForm.attendancePerc?.toFixed(0)}%</p></div>
+                                <div className="border-x border-stone-700"><p className="text-[10px] text-stone-400 uppercase tracking-widest">Goles</p><p className="text-xl font-black text-white">{playerConfigForm.totalGoals}</p></div>
+                                <div><p className="text-[10px] text-stone-400 uppercase tracking-widest">% Win</p><p className="text-xl font-black text-blue-400">{playerConfigForm.winPerc?.toFixed(0)}%</p></div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-sm text-stone-400 mb-1">Nombre</label><input type="text" value={playerConfigForm.name || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, name: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Apellido</label><input type="text" value={playerConfigForm.lastName || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, lastName: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label className="block text-sm text-stone-400 mb-1">Alias (Apodo)</label><input type="text" value={playerConfigForm.alias || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, alias: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Celular / WA</label><input type="text" value={playerConfigForm.phone || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, phone: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-stone-400 mb-1">Mi Posición en Cancha</label>
+                                <select value={playerConfigForm.position || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, position: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none text-sm">
+                                    <option className="bg-stone-900 text-white" value="">No definida</option>
+                                    <option className="bg-stone-900 text-white" value="ARQ">Arquero (ARQ)</option>
+                                    <option className="bg-stone-900 text-white" value="DEF">Defensa (DEF)</option>
+                                    <option className="bg-stone-900 text-white" value="MED">Medio (MED)</option>
+                                    <option className="bg-stone-900 text-white" value="DEL">Delantero (DEL)</option>
+                                </select>
+                            </div>
+                            <div className="bg-stone-900/50 p-3 rounded-lg border border-stone-700 mt-2">
+                                <p className="text-sm text-pitch-400 font-bold mb-2">Seguridad</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div><label className="block text-xs text-stone-400 mb-1">Usuario (Fijo)</label><input type="text" value={playerConfigForm.username || ''} disabled className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-500 outline-none cursor-not-allowed" /></div>
+                                    <div><label className="block text-xs text-stone-400 mb-1">Nueva Contraseña</label><input type="text" value={playerConfigForm.password || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, password: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 pt-4 border-t border-stone-700">
+                                <h4 className="text-white font-bold mb-3 flex items-center gap-2"><i className="ph-fill ph-clock-counter-clockwise text-pitch-400"></i> Mi Historial de Asistencias</h4>
+                                {myHistory.length === 0 ? (
+                                    <p className="text-sm text-stone-500 text-center py-4 border border-dashed border-stone-700 rounded-xl">Aún no tienes registro de partidos finalizados.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {myHistory.map((h, i) => (
+                                            <div key={i} className="bg-stone-900 p-3 rounded-xl border border-stone-700 text-sm flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-bold text-stone-200">{h.match.date}</p>
+                                                    <p className="text-xs text-stone-400 mt-1">
+                                                        {h.status === 'full' && <span className="text-pitch-400">Asistencia Completa</span>}
+                                                        {h.status === 'half' && <span className="text-gold">Medio Cupo</span>}
+                                                        {h.status === 'absent' && <span className="text-red-400">Faltó</span>}
+                                                        {h.status === 'excused' && <span className="text-stone-400">Justificado</span>}
+                                                        {h.status === 'free' && <span className="text-blue-400">Gratis/Invitado</span>}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    {h.team && <p className={`text-xs font-bold ${h.won ? 'text-blue-400' : 'text-stone-500'}`}>{h.won ? '🏆 Victoria' : 'Derrota'}</p>}
+                                                    {h.goals > 0 && <p className="text-xs font-bold text-pitch-400 mt-1">⚽ {h.goals} Goles</p>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <button onClick={handleSavePlayerProfile} className="w-full bg-pitch-600 hover:bg-pitch-500 py-3 rounded-lg text-white font-bold mt-4 transition-colors sticky bottom-0">Guardar Mis Cambios</button>
+                        </div>
+                    </Modal>
+
+                    {profileCropFile && <ImageCropperModal file={profileCropFile} onCropped={(dataUrl) => { setPlayerConfigForm({...playerConfigForm, photoUrl: dataUrl}); setProfileCropFile(null); }} onCancel={() => setProfileCropFile(null)} />}
+                </div>
+            );
+        }
+
+        // Render App
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
