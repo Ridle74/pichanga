@@ -5,58 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pichanga Chocolatera</title>
     
-    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Tailwind CSS (suppress CDN dev warning) -->
-    <script>
-        (function(){ const _w = console.warn; console.warn = function(...a){ if(typeof a[0]==='string' && a[0].includes('cdn.tailwindcss.com')) return; _w.apply(console,a); }; })();
-    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
-    <!-- html2canvas for High Quality Image Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <script>
-        // Firebase - Pichanga Chocolatera
-        window.firebaseVars = null;
-        window._firebaseReady = false;
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const tryLoadFirebase = async () => {
-            try {
-                const { initializeApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
-                const { getAuth, signInAnonymously, signInWithCustomToken } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
-                const { getFirestore, doc, setDoc, onSnapshot, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-
-                const firebaseConfig = {
-                    apiKey: "AIzaSyBinanH1KCpAYL58VQBT2KKCOnzUFMhof8",
-                    authDomain: "pichanga-chocolatera.firebaseapp.com",
-                    projectId: "pichanga-chocolatera",
-                    storageBucket: "pichanga-chocolatera.firebasestorage.app",
-                    messagingSenderId: "27861650922",
-                    appId: "1:27861650922:web:bf670c886d54f358c57693"
-                };
-                const appId = "pichanga-chocolatera";
-
-                const app = initializeApp(firebaseConfig);
-                const auth = getAuth(app);
-                const db = getFirestore(app);
-                window.firebaseVars = { app, auth, db, doc, setDoc, onSnapshot, collection, signInAnonymously, signInWithCustomToken, appId };
-                window._firebaseReady = true;
-            } catch(e) {
-                console.warn("Firebase no disponible, usando almacenamiento local.", e);
-                window._firebaseReady = false;
-            }
-            window.dispatchEvent(new Event('firebaseInitDone'));
+        // Tus credenciales de Firebase configuradas
+        const firebaseConfig = {
+          apiKey: "AIzaSyBinanH1KCpAYL58VQBT2KKCOnzUFMhof8",
+          authDomain: "pichanga-chocolatera.firebaseapp.com",
+          projectId: "pichanga-chocolatera",
+          storageBucket: "pichanga-chocolatera.firebasestorage.app",
+          messagingSenderId: "27861650922",
+          appId: "1:27861650922:web:bf670c886d54f358c57693"
         };
-        tryLoadFirebase();
+        const appId = firebaseConfig.appId;
+
+        // Inicializamos Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Exportamos variables globalmente para que React las pueda usar
+        window.firebaseVars = { app, auth, db, doc, setDoc, onSnapshot, collection, signInAnonymously, signInWithCustomToken, appId };
     </script>
 
     <script>
@@ -95,21 +77,31 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
-            background-color: #1c1917;
-            color: #e7e5e4;
+            background-color: #1c1917; /* stone-900 */
+            color: #e7e5e4; /* stone-200 */
             -webkit-font-smoothing: antialiased;
         }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #292524; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #57534e; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #78716c; }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #292524;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #57534e;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #78716c;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef, useCallback } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // --- FORMATTERS ---
         const formatDateShort = (dateStr) => {
@@ -169,7 +161,9 @@
         const captureAndDownload = async (elementId, fileName, setDownloading) => {
             if (!window.html2canvas) return;
             setDownloading(true);
+            
             await new Promise(r => setTimeout(r, 100));
+            
             try {
                 const element = document.getElementById(elementId);
                 const canvas = await window.html2canvas(element, {
@@ -187,7 +181,7 @@
             setDownloading(false);
         };
 
-        // --- INITIAL DATA ---
+        // --- MOCK INITIAL DATA ---
         const initialDB = {
             adminCredentials: { username: "admin", password: "1234" },
             players: [
@@ -198,20 +192,7 @@
             matches: []
         };
 
-        // --- LOCAL STORAGE PERSISTENCE (fallback when no Firebase) ---
-        const LS_KEY = 'pichanga_chocolatera_db';
-        const loadFromLS = () => {
-            try {
-                const raw = localStorage.getItem(LS_KEY);
-                if (raw) return JSON.parse(raw);
-            } catch(e) {}
-            return null;
-        };
-        const saveToLS = (data) => {
-            try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) {}
-        };
-
-        // --- BASE COMPONENTS ---
+        // --- COMPONENTS BASE ---
         function Modal({ isOpen, onClose, title, children }) {
             if (!isOpen) return null;
             return (
@@ -234,6 +215,7 @@
         function PlayerAvatar({ player, className = "w-10 h-10 text-sm" }) {
             const [imgError, setImgError] = useState(false);
             const hasImage = player.photoUrl && !imgError;
+
             if (hasImage) {
                 return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)} className={`${className} rounded-full object-cover object-center border border-pitch-500 shadow-inner bg-stone-900 shrink-0`} />;
             }
@@ -265,16 +247,26 @@
                 const { naturalWidth, naturalHeight } = e.target;
                 const initialScale = Math.max(256 / naturalWidth, 256 / naturalHeight);
                 setScale(initialScale);
-                setPos({ x: (256 - naturalWidth * initialScale) / 2, y: (256 - naturalHeight * initialScale) / 2 });
+                setPos({
+                    x: (256 - naturalWidth * initialScale) / 2,
+                    y: (256 - naturalHeight * initialScale) / 2
+                });
             };
 
             const handleCrop = () => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
                 const img = imgRef.current;
-                canvas.width = 256; canvas.height = 256;
+                
+                canvas.width = 256;
+                canvas.height = 256;
+                
                 ctx.clearRect(0, 0, 256, 256);
-                ctx.drawImage(img, pos.x, pos.y, img.naturalWidth * scale, img.naturalHeight * scale);
+                
+                const drawWidth = img.naturalWidth * scale;
+                const drawHeight = img.naturalHeight * scale;
+                
+                ctx.drawImage(img, pos.x, pos.y, drawWidth, drawHeight);
                 onCropped(canvas.toDataURL('image/jpeg', 0.9));
             };
 
@@ -284,7 +276,7 @@
                 <Modal isOpen={true} onClose={onCancel} title="Recortar Imagen">
                     <div className="flex flex-col items-center space-y-6 overflow-hidden">
                         <p className="text-stone-400 text-sm text-center">Arrastra la imagen y ajusta el zoom para centrar tu rostro en la cuadrícula.</p>
-                        <div
+                        <div 
                             className="relative bg-stone-900 border-2 border-dashed border-stone-500 rounded-full overflow-hidden cursor-move touch-none shadow-inner"
                             style={{ width: '256px', height: '256px', boxSizing: 'content-box' }}
                             onMouseDown={e => { setIsDragging(true); setStartPos({ x: e.clientX - pos.x, y: e.clientY - pos.y }); }}
@@ -295,8 +287,18 @@
                             onTouchMove={e => { if (isDragging) setPos({ x: e.touches[0].clientX - startPos.x, y: e.touches[0].clientY - startPos.y }); }}
                             onTouchEnd={() => setIsDragging(false)}
                         >
-                            <img ref={imgRef} src={src} onLoad={onImageLoad} alt="Crop preview"
-                                style={{ transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none', maxWidth: 'none' }} />
+                            <img 
+                                ref={imgRef}
+                                src={src} 
+                                onLoad={onImageLoad}
+                                alt="Crop preview" 
+                                style={{ 
+                                    transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`, 
+                                    transformOrigin: 'top left',
+                                    pointerEvents: 'none',
+                                    maxWidth: 'none'
+                                }} 
+                            />
                             <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
                                 <div className="w-full h-[1px] bg-white/40"></div>
                                 <div className="h-full w-[1px] bg-white/40 absolute"></div>
@@ -318,28 +320,36 @@
             );
         }
 
-        // --- MATCH INFO ---
+        // --- SECCIONES PRINCIPALES ---
         function MatchInfoSection({ currentMatch, updateCurrentMatch, deleteMatch, isAdmin }) {
             const [isEditing, setIsEditing] = useState(false);
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
             const [formData, setFormData] = useState({});
             const [yapeCopied, setYapeCopied] = useState(false);
 
-            useEffect(() => { if (currentMatch) setFormData({ ...currentMatch }); }, [currentMatch]);
+            useEffect(() => {
+                if (currentMatch) setFormData({ ...currentMatch });
+            }, [currentMatch]);
 
             if (!currentMatch) return null;
 
-            const handleSave = () => { updateCurrentMatch({ ...currentMatch, ...formData }); setIsEditing(false); };
+            const handleSave = () => {
+                updateCurrentMatch({ ...currentMatch, ...formData });
+                setIsEditing(false);
+            };
 
             const handleCopyYape = () => {
                 const yapeNumber = "918508591";
                 navigator.clipboard.writeText(yapeNumber).then(() => {
-                    setYapeCopied(true); setTimeout(() => setYapeCopied(false), 2000);
+                    setYapeCopied(true);
+                    setTimeout(() => setYapeCopied(false), 2000);
                 }).catch(() => {
-                    const t = document.createElement("textarea"); t.value = yapeNumber;
-                    document.body.appendChild(t); t.select();
-                    try { document.execCommand('copy'); setYapeCopied(true); setTimeout(() => setYapeCopied(false), 2000); } catch(e) {}
-                    document.body.removeChild(t);
+                    const textArea = document.createElement("textarea");
+                    textArea.value = yapeNumber;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try { document.execCommand('copy'); setYapeCopied(true); setTimeout(() => setYapeCopied(false), 2000); } catch (err) {}
+                    document.body.removeChild(textArea);
                 });
             };
 
@@ -370,6 +380,7 @@
                                 <p className="text-[10px] sm:text-sm text-stone-300 truncate">{formatTimeOnly(currentMatch.startTime)} - {formatTimeText(currentMatch.endTime)}</p>
                             </div>
                         </div>
+                        
                         <div className="flex items-start gap-2 bg-stone-900/50 p-2 sm:p-4 rounded-xl border border-stone-700/50">
                             <i className="ph-fill ph-map-pin text-lg sm:text-2xl text-choco-400 mt-0.5 sm:mt-1 shrink-0"></i>
                             <div className="min-w-0">
@@ -382,16 +393,18 @@
                                 )}
                             </div>
                         </div>
+
                         <div className="flex items-start gap-2 bg-stone-900/50 p-2 sm:p-4 rounded-xl border border-stone-700/50">
                             <i className="ph-fill ph-coins text-lg sm:text-2xl text-pitch-500 mt-0.5 sm:mt-1 shrink-0"></i>
                             <div className="min-w-0 w-full">
                                 <p className="text-[10px] sm:text-sm text-stone-400 font-medium">Cupo</p>
                                 <p className="font-bold text-xs sm:text-base text-pitch-400 truncate">S/ {Number(currentMatch.quota).toFixed(2)}</p>
                                 <button onClick={handleCopyYape} className="text-[10px] sm:text-sm text-stone-300 hover:text-white truncate flex items-center gap-1 transition-colors w-full text-left" title="Copiar Yape">
-                                    {yapeCopied ? <><i className="ph-bold ph-check text-pitch-400"></i><span className="text-pitch-400">¡Copiado!</span></> : <><i className="ph-bold ph-copy"></i> Yape: 918 508 591</>}
+                                    {yapeCopied ? <><i className="ph-bold ph-check text-pitch-400"></i> <span className="text-pitch-400">¡Copiado!</span></> : <><i className="ph-bold ph-copy"></i> Yape: 918 508 591</>}
                                 </button>
                             </div>
                         </div>
+
                         <div className="flex items-start gap-2 bg-stone-900/50 p-2 sm:p-4 rounded-xl border border-stone-700/50">
                             <i className="ph-fill ph-clock-countdown text-lg sm:text-2xl text-red-400 mt-0.5 sm:mt-1 shrink-0"></i>
                             <div className="min-w-0">
@@ -405,26 +418,26 @@
                     <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} title="Editar Información del Partido">
                         <div className="space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div><label className="block text-sm text-stone-400 mb-1">Fecha</label><input type="date" value={formData.date||''} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Fecha</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <div><label className="block text-sm text-stone-400 mb-1">Inicio</label><input type="time" value={formData.startTime||''} onChange={e => setFormData({...formData, startTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
-                                    <div><label className="block text-sm text-stone-400 mb-1">Fin</label><input type="time" value={formData.endTime||''} onChange={e => setFormData({...formData, endTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                    <div><label className="block text-sm text-stone-400 mb-1">Inicio</label><input type="time" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                    <div><label className="block text-sm text-stone-400 mb-1">Fin</label><input type="time" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div><label className="block text-sm text-stone-400 mb-1">Lugar</label><input type="text" value={formData.location||''} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
-                                <div><label className="block text-sm text-stone-400 mb-1">Link Google Maps (Opcional)</label><input type="text" value={formData.mapUrl||''} onChange={e => setFormData({...formData, mapUrl: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Lugar</label><input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Link Google Maps (Opcional)</label><input type="text" value={formData.mapUrl} onChange={e => setFormData({...formData, mapUrl: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div><label className="block text-sm text-stone-400 mb-1">Cuota (S/)</label><input type="number" step="0.10" value={formData.quota||''} onChange={e => setFormData({...formData, quota: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                <div><label className="block text-sm text-stone-400 mb-1">Cuota (S/)</label><input type="number" step="0.10" value={formData.quota} onChange={e => setFormData({...formData, quota: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <div><label className="block text-sm text-stone-400 mb-1">Día Límite</label><input type="date" value={formData.deadlineDate||''} onChange={e => setFormData({...formData, deadlineDate: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
-                                    <div><label className="block text-sm text-stone-400 mb-1">Hora Límite</label><input type="time" value={formData.deadlineTime||''} onChange={e => setFormData({...formData, deadlineTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                    <div><label className="block text-sm text-stone-400 mb-1">Día Límite</label><input type="date" value={formData.deadlineDate} onChange={e => setFormData({...formData, deadlineDate: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
+                                    <div><label className="block text-sm text-stone-400 mb-1">Hora Límite</label><input type="time" value={formData.deadlineTime} onChange={e => setFormData({...formData, deadlineTime: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none" /></div>
                                 </div>
                             </div>
                             <div>
                                 <label className="block text-sm text-stone-400 mb-1">Estado del Partido</label>
-                                <select value={formData.status||'upcoming'} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none">
+                                <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white outline-none">
                                     <option className="bg-stone-900 text-white" value="upcoming">Próxima / En Curso</option>
                                     <option className="bg-stone-900 text-white" value="completed">Finalizada (Suma a estadísticas)</option>
                                 </select>
@@ -449,12 +462,10 @@
             );
         }
 
-        // --- ROSTER SECTION ---
         function CurrentRosterSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin }) {
             const [showAddModal, setShowAddModal] = useState(false);
             const [searchTerm, setSearchTerm] = useState("");
             const [copyFeedback, setCopyFeedback] = useState(false);
-            const [copyMsgFeedback, setCopyMsgFeedback] = useState(false);
             const [isDownloading, setIsDownloading] = useState(false);
 
             if (!currentMatch) return null;
@@ -465,8 +476,8 @@
             const convocadosList = computedPlayers.filter(p => attendeesMap[p.id] && attendeesMap[p.id] !== 'none');
             const noConvocadosList = computedPlayers.filter(p => !attendeesMap[p.id] || attendeesMap[p.id] === 'none');
 
-            const filteredNoConvocados = noConvocadosList.filter(p =>
-                p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            const filteredNoConvocados = noConvocadosList.filter(p => 
+                p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                 (p.lastName && p.lastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
                 (p.alias && p.alias.toLowerCase().includes(searchTerm.toLowerCase()))
             );
@@ -485,60 +496,28 @@
             };
 
             const handleCopyNumbers = () => {
-                const textToCopy = convocadosList.filter(p => p.phone).map(p => `${p.name} ${p.lastName || ''} - ${p.phone}`).join('\n');
+                const textToCopy = convocadosList
+                    .filter(p => p.phone)
+                    .map(p => `${p.name} ${p.lastName || ''} - ${p.phone}`)
+                    .join('\n');
+                
                 if (textToCopy) {
-                    navigator.clipboard.writeText(textToCopy).then(() => { setCopyFeedback(true); setTimeout(() => setCopyFeedback(false), 2000); }).catch(() => {
-                        const t = document.createElement("textarea"); t.value = textToCopy;
-                        document.body.appendChild(t); t.select();
-                        try { document.execCommand('copy'); setCopyFeedback(true); setTimeout(() => setCopyFeedback(false), 2000); } catch(e) {}
-                        document.body.removeChild(t);
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        setCopyFeedback(true);
+                        setTimeout(() => setCopyFeedback(false), 2000);
+                    }).catch(() => {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = textToCopy;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            setCopyFeedback(true);
+                            setTimeout(() => setCopyFeedback(false), 2000);
+                        } catch (err) {}
+                        document.body.removeChild(textArea);
                     });
                 }
-            };
-
-            const handleCopyMessage = () => {
-                const SITE_URL = 'https://pchocolatera.com';
-                const WD_SHORT = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
-                const MO_SHORT = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-                const WD_LONG  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-
-                const parseDateLocal = (ds) => { if(!ds) return null; const [y,m,d]=ds.split('-'); return new Date(+y,+m-1,+d); };
-
-                const d = parseDateLocal(currentMatch.date);
-                const dateHeader = d ? `${WD_SHORT[d.getDay()]} ${d.getDate()} ${MO_SHORT[d.getMonth()]}` : '';
-
-                const fmtTime = (ts) => {
-                    if(!ts||!/^\d{2}:\d{2}$/.test(ts)) return ts||'';
-                    const [h,m]=ts.split(':'); let hr=+h; const ap=hr>=12?'p.m.':'a.m.'; hr=hr%12||12;
-                    return `${hr}:${m} ${ap}`;
-                };
-                const horario = `${fmtTime(currentMatch.startTime)} - ${fmtTime(currentMatch.endTime)}`;
-
-                const dd = parseDateLocal(currentMatch.deadlineDate);
-                let deadline = '';
-                if (dd) {
-                    const ts = currentMatch.deadlineTime;
-                    let timeStr = '';
-                    if (ts && /^\d{2}:\d{2}$/.test(ts)) {
-                        const [h,m]=ts.split(':'); let hr=+h; const ap=hr>=12?'pm':'am'; hr=hr%12||12;
-                        timeStr = ` ${hr}${m!=='00'?':'+m:''} ${ap}`;
-                    }
-                    deadline = `${WD_LONG[dd.getDay()]}${timeStr}`;
-                }
-
-                const playerLines = convocadosList.map((p, i) => {
-                    const name = p.name + (p.lastName ? ` ${p.lastName.charAt(0)}.` : '');
-                    return `${String(i+1).padStart(2,'0')}. ${name} 💯`;
-                }).join('\n');
-
-                const msg = `*🔥 CONVOCADOS ${dateHeader} 🔥*\n\n*Lugar:* ${currentMatch.location || '-'}\n*Horario:* ${horario}\n*Fecha de Adelanto:* ${deadline}\n\nPágina: ${SITE_URL}\n\n${playerLines}\n\n*Más Información en la página web*`;
-
-                navigator.clipboard.writeText(msg).then(() => { setCopyMsgFeedback(true); setTimeout(() => setCopyMsgFeedback(false), 2500); }).catch(() => {
-                    const t = document.createElement('textarea'); t.value = msg;
-                    document.body.appendChild(t); t.select();
-                    try { document.execCommand('copy'); setCopyMsgFeedback(true); setTimeout(() => setCopyMsgFeedback(false), 2500); } catch(e) {}
-                    document.body.removeChild(t);
-                });
             };
 
             return (
@@ -556,11 +535,6 @@
                             {isAdmin && (
                                 <button onClick={handleCopyNumbers} className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800/80 text-blue-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors border border-blue-900 text-[10px] sm:text-sm">
                                     {copyFeedback ? <><i className="ph-fill ph-check"></i> Copiados</> : <><i className="ph ph-copy"></i> N°s</>}
-                                </button>
-                            )}
-                            {isAdmin && (
-                                <button onClick={handleCopyMessage} className="flex-1 sm:flex-none bg-green-900/50 hover:bg-green-800/80 text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors border border-green-900 text-[10px] sm:text-sm" title="Copiar mensaje de convocatoria para WhatsApp">
-                                    {copyMsgFeedback ? <><i className="ph-fill ph-check"></i> ¡Listo!</> : <><i className="ph ph-whatsapp-logo"></i> WA</>}
                                 </button>
                             )}
                             {isAdmin && !isCompleted && (
@@ -589,10 +563,13 @@
                                     <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
                                         <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0" />
                                         <div className="min-w-0 flex-1">
-                                            <p className="font-semibold text-stone-100 text-[10px] sm:text-base truncate">{formatPlayerName(player, isAdmin)}</p>
+                                            <p className="font-semibold text-stone-100 text-[10px] sm:text-base truncate">
+                                                {formatPlayerName(player, isAdmin)}
+                                            </p>
                                             {isAdmin && player.phone && <p className="text-[8px] sm:text-xs text-stone-500 font-mono truncate" data-html2canvas-ignore="true"><i className="ph ph-whatsapp logo text-pitch-500"></i> {player.phone}</p>}
                                         </div>
                                     </div>
+
                                     {isAdmin && !isCompleted ? (
                                         <select value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)} className="bg-stone-800 text-[8px] sm:text-sm border border-stone-600 rounded-md p-1 focus:border-pitch-500 outline-none text-stone-200 shrink-0 w-full sm:w-auto">
                                             <option className="bg-stone-900 text-white" value="full">✔️ Completo</option>
@@ -653,7 +630,6 @@
             );
         }
 
-        // --- MATCH HIGHLIGHTS ---
         function MatchHighlightsSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin, loggedPlayerId }) {
             if (!currentMatch || currentMatch.status !== 'completed') return null;
 
@@ -662,32 +638,39 @@
             const scoreB = goalsList.filter(g => g.team === 'B').length;
 
             const goalCounts = {};
-            goalsList.forEach(g => { goalCounts[g.playerId] = (goalCounts[g.playerId] || 0) + 1; });
+            goalsList.forEach(g => {
+                goalCounts[g.playerId] = (goalCounts[g.playerId] || 0) + 1;
+            });
 
             let scorers = Object.keys(goalCounts).map(pId => {
                 const player = computedPlayers.find(p => p.id === pId) || { id: pId, name: 'Desconocido' };
                 return { player, count: goalCounts[pId], team: currentMatch.teams?.[pId] };
             });
 
+            // Find the maximum goals scored
             const maxGoals = scorers.length > 0 ? Math.max(...scorers.map(s => s.count)) : 0;
             let candidates = scorers.filter(s => s.count === maxGoals);
 
+            // Tie-Breaker Rule 1: Prioritize the winning team
             let winningTeam = null;
             if (scoreA > scoreB) winningTeam = 'A';
             else if (scoreB > scoreA) winningTeam = 'B';
 
             if (winningTeam) {
-                const wc = candidates.filter(s => s.team === winningTeam);
-                if (wc.length > 0) candidates = wc;
+                const winningTeamCandidates = candidates.filter(s => s.team === winningTeam);
+                if (winningTeamCandidates.length > 0) candidates = winningTeamCandidates;
             }
 
-            let topScorer = null, isTiedScorer = false;
+            let topScorer = null;
+            let isTiedScorer = false;
+
+            // Tie-Breaker Rule 2: Manual Selection if tie persists
             if (candidates.length === 1) {
                 topScorer = candidates[0];
             } else if (candidates.length > 1) {
                 if (currentMatch.manualTopScorerId) {
                     topScorer = candidates.find(c => c.player.id === currentMatch.manualTopScorerId);
-                    if (!topScorer) isTiedScorer = true;
+                    if (!topScorer) isTiedScorer = true; // Fallback if ID is wrong
                 } else {
                     isTiedScorer = true;
                 }
@@ -695,15 +678,22 @@
 
             scorers.sort((a, b) => b.count - a.count);
 
-            const teamAWinner = scoreA > scoreB, teamBWinner = scoreB > scoreA, isDraw = scoreA === scoreB;
+            const teamAWinner = scoreA > scoreB;
+            const teamBWinner = scoreB > scoreA;
+            const isDraw = scoreA === scoreB;
+
+            // --- MVP Logic ---
             const isVoting = currentMatch.mvpMode === 'voting';
             const attendees = computedPlayers.filter(p => currentMatch.attendees?.[p.id] && currentMatch.attendees?.[p.id] !== 'none');
+            
+            let mvpPlayer = null;
+            let tiedMvps = [];
 
-            let mvpPlayer = null, tiedMvps = [];
             if (isVoting) {
                 const votes = currentMatch.mvpVotes || {};
                 const voteCounts = {};
                 Object.values(votes).forEach(v => voteCounts[v] = (voteCounts[v] || 0) + 1);
+                
                 const maxVotes = Object.keys(voteCounts).length > 0 ? Math.max(...Object.values(voteCounts)) : 0;
                 if (maxVotes > 0) {
                     const leaders = Object.keys(voteCounts).filter(k => voteCounts[k] === maxVotes);
@@ -720,12 +710,13 @@
             return (
                 <section className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-2xl p-3 sm:p-6 shadow-2xl border border-pitch-900/50 mb-6 sm:mb-8 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-pitch-500/10 blur-3xl rounded-full pointer-events-none"></div>
+                    
                     <h2 className="text-lg sm:text-2xl font-black text-white flex items-center justify-center gap-2 mb-4 sm:mb-6 relative z-10 text-center">
                         <i className="ph-fill ph-trophy text-gold text-2xl sm:text-3xl"></i> Resumen del Partido
                     </h2>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 relative z-10">
-                        {/* Marcador */}
+                        {/* Marcador Central */}
                         <div className="bg-stone-900/80 border border-stone-700 p-3 sm:p-6 rounded-2xl flex flex-col items-center justify-center col-span-2 shadow-inner">
                             <p className="text-stone-400 text-[10px] sm:text-sm font-bold uppercase tracking-widest mb-2 sm:mb-4">Marcador Final</p>
                             <div className="flex items-center gap-4 sm:gap-6">
@@ -746,7 +737,10 @@
 
                         {/* Top Scorer */}
                         <div className="relative bg-stone-900/80 border border-stone-500 p-3 sm:p-4 flex flex-col items-center justify-start col-span-1 rounded-2xl shadow-inner mt-4 mb-4 sm:mt-6 sm:mb-6 min-h-[220px] sm:min-h-[240px]">
-                            <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-stone-400 text-stone-900 text-[9px] sm:text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md whitespace-nowrap z-10">MÁX. GOLEADOR</div>
+                            <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-stone-400 text-stone-900 text-[9px] sm:text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md whitespace-nowrap z-10">
+                                MÁX. GOLEADOR
+                            </div>
+
                             {isTiedScorer ? (
                                 <>
                                     {isAdmin ? (
@@ -797,12 +791,15 @@
                             <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-gold text-stone-900 text-[9px] sm:text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md whitespace-nowrap z-10 flex items-center gap-1">
                                 <i className="ph-fill ph-star"></i> MVP OFICIAL
                             </div>
+
                             {isAdmin && (
                                 <div className="absolute top-1 right-1 sm:top-2 sm:right-2 flex overflow-hidden rounded border border-stone-700 text-[7px] sm:text-[9px] font-bold z-20 shadow-md">
                                     <button onClick={() => updateCurrentMatch({ ...currentMatch, mvpMode: 'manual' })} className={`px-1.5 py-0.5 sm:px-2 sm:py-1 transition-colors ${!isVoting ? 'bg-gold text-stone-900' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}>Manual</button>
                                     <button onClick={() => updateCurrentMatch({ ...currentMatch, mvpMode: 'voting' })} className={`px-1.5 py-0.5 sm:px-2 sm:py-1 transition-colors ${isVoting ? 'bg-gold text-stone-900' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}>Votos</button>
                                 </div>
                             )}
+
+                            {/* MVP Display */}
                             {mvpPlayer ? (
                                 <div className="flex flex-col items-center mt-4 sm:mt-6 w-full flex-1">
                                     <div className="relative">
@@ -830,6 +827,8 @@
                                     <p className="text-[10px] sm:text-sm font-bold leading-tight">Por definir</p>
                                 </div>
                             )}
+
+                            {/* MVP Controls */}
                             <div className="mt-auto pt-2 w-full relative z-30" data-html2canvas-ignore="true">
                                 {!isVoting && isAdmin && (
                                     <select value={currentMatch.mvpId || ''} onChange={(e) => updateCurrentMatch({...currentMatch, mvpId: e.target.value})} className="w-full bg-stone-900 border border-gold/50 rounded p-1 text-gold outline-none text-[9px] sm:text-xs text-center font-bold shadow-lg">
@@ -849,7 +848,7 @@
                             </div>
                         </div>
 
-                        {/* Goleadores */}
+                        {/* Lista de Goleadores */}
                         <div className="bg-stone-900/80 border border-stone-700 p-3 sm:p-5 rounded-2xl col-span-2 md:col-span-4 shadow-inner flex flex-col max-h-[140px] sm:max-h-[200px]">
                             <p className="text-stone-400 text-[10px] sm:text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
                                 <i className="ph-fill ph-list-numbers text-sm sm:text-lg text-pitch-400"></i> Tabla de Goles
@@ -860,7 +859,9 @@
                                         <div className="flex items-center gap-1.5 sm:gap-2">
                                             <span className="text-stone-500 font-bold text-[10px] sm:text-xs w-3 sm:w-4 text-right">{idx + 1}.</span>
                                             <PlayerAvatar player={s.player} className="w-5 h-5 sm:w-6 sm:h-6 text-[8px] sm:text-[10px]" />
-                                            <span className="text-[10px] sm:text-sm font-medium text-stone-200 truncate max-w-[120px] sm:max-w-[200px]">{s.player.name} {s.player.lastName?.charAt(0)}.</span>
+                                            <span className="text-[10px] sm:text-sm font-medium text-stone-200 truncate max-w-[120px] sm:max-w-[200px]">
+                                                {s.player.name} {s.player.lastName?.charAt(0)}.
+                                            </span>
                                         </div>
                                         <div className="flex items-center gap-1 sm:gap-2">
                                             {s.team && <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${s.team === 'A' ? 'bg-blue-400' : 'bg-red-400'}`}></div>}
@@ -877,9 +878,9 @@
             );
         }
 
-        // --- BOARD SECTION ---
         function MatchBoardSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin }) {
             const [isDownloading, setIsDownloading] = useState(false);
+
             if (!currentMatch) return null;
 
             const isCompleted = currentMatch.status === 'completed';
@@ -905,7 +906,8 @@
 
             const handleAddGoal = (playerId, team) => {
                 if (isCompleted || !isAdmin) return;
-                updateCurrentMatch({ ...currentMatch, goals: [...goalsList, { id: Date.now().toString(), playerId, team }] });
+                const newGoals = [...goalsList, { id: Date.now().toString(), playerId, team }];
+                updateCurrentMatch({ ...currentMatch, goals: newGoals });
             };
 
             const handleDecreaseGoal = (playerId, team) => {
@@ -913,7 +915,8 @@
                 const playerTeamGoals = goalsList.filter(g => g.playerId === playerId && g.team === team);
                 if (playerTeamGoals.length === 0) return;
                 const lastGoalId = playerTeamGoals[playerTeamGoals.length - 1].id;
-                updateCurrentMatch({ ...currentMatch, goals: goalsList.filter(g => g.id !== lastGoalId) });
+                const newGoals = goalsList.filter(g => g.id !== lastGoalId);
+                updateCurrentMatch({ ...currentMatch, goals: newGoals });
             };
 
             return (
@@ -930,38 +933,67 @@
                     </div>
 
                     <div className="grid grid-cols-2 gap-1.5 sm:gap-6">
-                        {[{team:'A', color:'blue', list:teamA, score:scoreA}, {team:'B', color:'red', list:teamB, score:scoreB}].map(({team, color, list, score}) => (
-                            <div key={team} className={`bg-stone-900 border border-${color}-900/50 rounded-xl p-1.5 sm:p-4`}>
-                                <div className="flex justify-between items-center mb-1.5 sm:mb-4 gap-1">
-                                    <h3 className={`font-bold text-${color}-400 text-[10px] sm:text-lg`}>{team === 'A' ? 'Azul (A)' : 'Rojo (B)'}</h3>
-                                    <span className={`text-lg sm:text-2xl font-black text-white bg-${color}-900/30 px-2 py-0.5 rounded-md`}>{score}</span>
-                                </div>
-                                <div className="space-y-1 sm:space-y-2 min-h-[60px] sm:min-h-[100px]">
-                                    {list.map(p => {
-                                        const pGoals = goalsList.filter(g => g.playerId === p.id && g.team === team);
-                                        return (
-                                            <div key={p.id} className="flex justify-between items-center bg-stone-800 p-1 sm:p-2 rounded border border-stone-700/30">
-                                                <div className="flex items-center gap-1 sm:gap-2 min-w-0">
-                                                    <span className="text-stone-300 text-[9px] sm:text-sm truncate">{p.name} {p.lastName?.charAt(0)}.</span>
-                                                    {pGoals.length > 0 && <span className="text-[8px] sm:text-xs text-pitch-400 font-bold shrink-0">⚽x{pGoals.length}</span>}
-                                                </div>
-                                                <div className="flex gap-0.5 sm:gap-1 shrink-0" data-html2canvas-ignore="true">
-                                                    {isAdmin && !isCompleted && pGoals.length > 0 && (
-                                                        <button onClick={() => handleDecreaseGoal(p.id, team)} className="text-red-400 hover:text-red-300 bg-red-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs">-</button>
-                                                    )}
-                                                    {isAdmin && !isCompleted && (
-                                                        <button onClick={() => handleAddGoal(p.id, team)} className="text-pitch-400 hover:text-pitch-300 bg-pitch-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs">+</button>
-                                                    )}
-                                                    {isAdmin && !isCompleted && (
-                                                        <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center ml-0.5"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                        <div className="bg-stone-900 border border-blue-900/50 rounded-xl p-1.5 sm:p-4">
+                            <div className="flex justify-between items-center mb-1.5 sm:mb-4 gap-1">
+                                <h3 className="font-bold text-blue-400 text-[10px] sm:text-lg">Azul (A)</h3>
+                                <span className="text-lg sm:text-2xl font-black text-white bg-blue-900/30 px-2 py-0.5 rounded-md">{scoreA}</span>
                             </div>
-                        ))}
+                            <div className="space-y-1 sm:space-y-2 min-h-[60px] sm:min-h-[100px]">
+                                {teamA.map(p => {
+                                    const pGoals = goalsList.filter(g => g.playerId === p.id && g.team === 'A');
+                                    return (
+                                        <div key={p.id} className="flex justify-between items-center bg-stone-800 p-1 sm:p-2 rounded border border-stone-700/30">
+                                            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                                                <span className="text-stone-300 text-[9px] sm:text-sm truncate">{p.name} {p.lastName?.charAt(0)}.</span>
+                                                {pGoals.length > 0 && <span className="text-[8px] sm:text-xs text-pitch-400 font-bold shrink-0">⚽x{pGoals.length}</span>}
+                                            </div>
+                                            <div className="flex gap-0.5 sm:gap-1 shrink-0" data-html2canvas-ignore="true">
+                                                {isAdmin && !isCompleted && pGoals.length > 0 && (
+                                                    <button onClick={() => handleDecreaseGoal(p.id, 'A')} className="text-red-400 hover:text-red-300 bg-red-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Quitar un gol">-</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAddGoal(p.id, 'A')} className="text-pitch-400 hover:text-pitch-300 bg-pitch-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Añadir un gol">+</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center ml-0.5" title="Quitar del equipo"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="bg-stone-900 border border-red-900/50 rounded-xl p-1.5 sm:p-4">
+                            <div className="flex justify-between items-center mb-1.5 sm:mb-4 gap-1">
+                                <h3 className="font-bold text-red-400 text-[10px] sm:text-lg">Rojo (B)</h3>
+                                <span className="text-lg sm:text-2xl font-black text-white bg-red-900/30 px-2 py-0.5 rounded-md">{scoreB}</span>
+                            </div>
+                            <div className="space-y-1 sm:space-y-2 min-h-[60px] sm:min-h-[100px]">
+                                {teamB.map(p => {
+                                    const pGoals = goalsList.filter(g => g.playerId === p.id && g.team === 'B');
+                                    return (
+                                        <div key={p.id} className="flex justify-between items-center bg-stone-800 p-1 sm:p-2 rounded border border-stone-700/30">
+                                            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                                                <span className="text-stone-300 text-[9px] sm:text-sm truncate">{p.name} {p.lastName?.charAt(0)}.</span>
+                                                {pGoals.length > 0 && <span className="text-[8px] sm:text-xs text-pitch-400 font-bold shrink-0">⚽x{pGoals.length}</span>}
+                                            </div>
+                                            <div className="flex gap-0.5 sm:gap-1 shrink-0" data-html2canvas-ignore="true">
+                                                {isAdmin && !isCompleted && pGoals.length > 0 && (
+                                                    <button onClick={() => handleDecreaseGoal(p.id, 'B')} className="text-red-400 hover:text-red-300 bg-red-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Quitar un gol">-</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAddGoal(p.id, 'B')} className="text-pitch-400 hover:text-pitch-300 bg-pitch-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Añadir un gol">+</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center ml-0.5" title="Quitar del equipo"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
                     </div>
 
                     {!isCompleted && unassigned.length > 0 && (
@@ -986,16 +1018,18 @@
             );
         }
 
-        // --- LEADERBOARD ---
         function LeaderboardSection({ computedPlayers, isAdmin }) {
             const [sortBy, setSortBy] = useState('asistencia');
 
             const rankedPlayers = computedPlayers.map(p => {
                 const percentage = p.attendancePerc || 0;
-                let tier = 'C', tierColor = 'text-red-400', tierBg = 'bg-red-400/10 border-red-400/20';
+                let tier = 'C', tierColor = 'text-stone-400', tierBg = 'bg-stone-400/10 border-stone-400/20';
+                
                 if (percentage >= 75) { tier = 'S'; tierColor = 'text-pitch-400'; tierBg = 'bg-pitch-400/10 border-pitch-400/20'; }
                 else if (percentage >= 50) { tier = 'A'; tierColor = 'text-blue-400'; tierBg = 'bg-blue-400/10 border-blue-400/20'; }
                 else if (percentage >= 25) { tier = 'B'; tierColor = 'text-gold'; tierBg = 'bg-gold/10 border-gold/20'; }
+                else { tier = 'C'; tierColor = 'text-red-400'; tierBg = 'bg-red-400/10 border-red-400/20'; }
+
                 return { ...p, tier, tierColor, tierBg };
             });
 
@@ -1064,8 +1098,12 @@
                                         <td className="p-1 sm:p-3 text-center">
                                             <span className={`inline-block px-1 py-0.5 sm:px-3 sm:py-1 rounded border ${player.tierBg} ${player.tierColor} font-black text-[9px] sm:text-sm w-full sm:w-12 text-center`}>{player.tier}</span>
                                         </td>
-                                        <td className="p-1 sm:p-3 text-center font-bold text-stone-300 text-[11px] sm:text-base">{player.totalGoals}</td>
-                                        <td className="p-1 sm:p-3 text-center text-[10px] sm:text-sm font-semibold text-blue-300">{player.winPerc.toFixed(0)}%</td>
+                                        <td className="p-1 sm:p-3 text-center font-bold text-stone-300 text-[11px] sm:text-base">
+                                            {player.totalGoals}
+                                        </td>
+                                        <td className="p-1 sm:p-3 text-center text-[10px] sm:text-sm font-semibold text-blue-300">
+                                            {player.winPerc.toFixed(0)}%
+                                        </td>
                                         <td className="p-1 sm:p-3 text-right">
                                             <span className={`font-bold text-[10px] sm:text-base ${player.tierColor}`}>{player.attendancePerc.toFixed(0)}%</span>
                                         </td>
@@ -1078,7 +1116,6 @@
             );
         }
 
-        // --- ADMIN PANEL ---
         function AdminPanel({ dbState, updateState, computedPlayers, handleExportDB, handleImportDB }) {
             const [filterTag, setFilterTag] = useState('all');
             const [isAddingPlayer, setIsAddingPlayer] = useState(false);
@@ -1089,7 +1126,8 @@
             const [cropFile, setCropFile] = useState(null);
 
             const players = dbState?.players || [];
-
+            
+            // Computar Etiquetas (Tags) para cada jugador
             const playersWithTags = computedPlayers.map(p => {
                 let tags = [];
                 if (!p.name) tags.push({id: 'missing_name', label: 'Falta Nombre', color: 'bg-red-900/40 text-red-300 border-red-700/50'});
@@ -1097,39 +1135,63 @@
                 if (!p.phone) tags.push({id: 'missing_phone', label: 'Falta Celular', color: 'bg-orange-900/40 text-orange-300 border-orange-700/50'});
                 if (!p.username) tags.push({id: 'missing_user', label: 'Falta Usuario', color: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50'});
                 if (!p.password) tags.push({id: 'missing_pass', label: 'Falta Clave', color: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50'});
+                
                 if (tags.length === 0) tags.push({id: 'complete', label: 'Datos Completos', color: 'bg-pitch-900/40 text-pitch-400 border-pitch-700/50'});
                 return { ...p, tags };
             });
 
-            const filteredPlayers = filterTag === 'all' ? playersWithTags : playersWithTags.filter(p => p.tags.some(t => t.id === filterTag));
+            // Filtrar Lista según Etiqueta Seleccionada
+            const filteredPlayers = filterTag === 'all' 
+                ? playersWithTags 
+                : playersWithTags.filter(p => p.tags.some(t => t.id === filterTag));
 
             const handleSavePlayer = () => {
-                if (!playerForm.name) { setFormError("⚠️ El Nombre es obligatorio."); return; }
+                if (!playerForm.name) {
+                    setFormError("⚠️ El Nombre es obligatorio.");
+                    return;
+                }
                 if (playerForm.username) {
                     const isDuplicate = players.some(p => p.username === playerForm.username && p.id !== editingPlayerId);
-                    if(isDuplicate) { setFormError("⚠️ Este nombre de usuario ya está en uso."); return; }
+                    if(isDuplicate) {
+                        setFormError("⚠️ Este nombre de usuario ya está en uso.");
+                        return;
+                    }
                 }
+
                 setFormError("");
                 const newPlayers = [...players];
                 if (editingPlayerId) {
                     const idx = newPlayers.findIndex(p => p.id === editingPlayerId);
                     if (idx !== -1) newPlayers[idx] = { ...newPlayers[idx], ...playerForm };
                 } else {
-                    newPlayers.push({ id: Date.now().toString(), ...playerForm, baseMatches: Number(playerForm.baseMatches)||0, basePoints: Number(playerForm.basePoints)||0, baseGoals: Number(playerForm.baseGoals)||0, baseWins: Number(playerForm.baseWins)||0 });
+                    newPlayers.push({
+                        id: Date.now().toString(),
+                        ...playerForm,
+                        baseMatches: Number(playerForm.baseMatches) || 0,
+                        basePoints: Number(playerForm.basePoints) || 0,
+                        baseGoals: Number(playerForm.baseGoals) || 0,
+                        baseWins: Number(playerForm.baseWins) || 0
+                    });
                 }
                 updateState({ ...dbState, players: newPlayers });
-                setIsAddingPlayer(false); setEditingPlayerId(null);
+                setIsAddingPlayer(false);
+                setEditingPlayerId(null);
             };
 
             const confirmDeletePlayer = () => {
                 if (!playerToDelete) return;
-                updateState({ ...dbState, players: players.filter(p => p.id !== playerToDelete) });
+                updateState({
+                    ...dbState,
+                    players: players.filter(p => p.id !== playerToDelete),
+                });
                 setPlayerToDelete(null);
             };
 
-            const editPlayer = (pId) => {
+            const editPlayer = (pId) => { 
                 const rawP = players.find(x => x.id === pId);
-                setPlayerForm({...rawP}); setEditingPlayerId(pId); setIsAddingPlayer(true);
+                setPlayerForm({...rawP}); 
+                setEditingPlayerId(pId); 
+                setIsAddingPlayer(true); 
             };
 
             return (
@@ -1137,39 +1199,39 @@
                     <div className="absolute top-0 right-0 bg-choco-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">MODO ADMIN</div>
                     <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-6 mt-2"><i className="ph-fill ph-database text-choco-400"></i> Base de Datos</h2>
 
-                    <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                        <div className="bg-stone-900 rounded-xl p-2.5 sm:p-5 border border-stone-700 flex flex-col justify-between">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="bg-stone-900 rounded-xl p-5 border border-stone-700 flex flex-col justify-between">
                             <div>
-                                <h3 className="text-white font-semibold mb-1 sm:mb-2 flex items-center gap-1.5 text-xs sm:text-base"><i className="ph-fill ph-files"></i> Respaldos</h3>
-                                <p className="text-[10px] sm:text-sm text-stone-400 mb-2 sm:mb-4 hidden sm:block">Exporta o importa toda la base de datos.</p>
+                                <h3 className="text-white font-semibold mb-2 flex items-center gap-2"><i className="ph-fill ph-files"></i> Respaldos</h3>
+                                <p className="text-sm text-stone-400 mb-4">Exporta o importa toda la base de datos.</p>
                             </div>
-                            <div className="flex gap-1.5 sm:gap-2">
-                                <button onClick={handleExportDB} className="flex-1 bg-stone-700 hover:bg-stone-600 py-1.5 sm:py-2 rounded-lg text-white font-semibold text-[10px] sm:text-sm transition-colors flex items-center justify-center gap-1 sm:gap-2"><i className="ph ph-download-simple"></i> <span className="hidden sm:inline">Exportar</span><span className="sm:hidden">Exp.</span></button>
-                                <label className="flex-1 bg-choco-700 hover:bg-choco-600 cursor-pointer py-1.5 sm:py-2 rounded-lg text-white font-semibold text-[10px] sm:text-sm transition-colors flex items-center justify-center gap-1 sm:gap-2">
-                                    <i className="ph ph-upload-simple"></i> <span className="hidden sm:inline">Importar</span><span className="sm:hidden">Imp.</span> <input type="file" accept=".json" className="hidden" onChange={handleImportDB} />
+                            <div className="flex gap-2">
+                                <button onClick={handleExportDB} className="flex-1 bg-stone-700 hover:bg-stone-600 py-2 rounded-lg text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2"><i className="ph ph-download-simple"></i> Exportar</button>
+                                <label className="flex-1 bg-choco-700 hover:bg-choco-600 cursor-pointer py-2 rounded-lg text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">
+                                    <i className="ph ph-upload-simple"></i> Importar <input type="file" accept=".json" className="hidden" onChange={handleImportDB} />
                                 </label>
                             </div>
                         </div>
 
-                        <div className="bg-stone-900 rounded-xl p-2.5 sm:p-5 border border-stone-700">
-                            <div className="flex flex-col gap-1.5 sm:gap-3 mb-2 sm:mb-4 border-b border-stone-800 pb-2 sm:pb-3">
-                                <h3 className="text-white font-semibold text-xs sm:text-base">Registrados: <span className="text-pitch-400">{filteredPlayers.length}</span></h3>
-                                <div className="flex gap-1 sm:gap-2 w-full">
-                                    <select value={filterTag} onChange={e => setFilterTag(e.target.value)} className="bg-stone-800 border border-stone-600 rounded p-1 text-[9px] sm:text-xs text-white outline-none flex-1 min-w-0">
-                                        <option value="all">Todas</option>
-                                        <option value="complete">✅ Completos</option>
-                                        <option value="missing_name">❌ Nombre</option>
-                                        <option value="missing_lastName">❌ Apellido</option>
-                                        <option value="missing_phone">❌ Celular</option>
-                                        <option value="missing_user">❌ Usuario</option>
-                                        <option value="missing_pass">❌ Clave</option>
+                        <div className="bg-stone-900 rounded-xl p-5 border border-stone-700">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3 border-b border-stone-800 pb-3">
+                                <h3 className="text-white font-semibold">Registrados: <span className="text-pitch-400">{filteredPlayers.length}</span></h3>
+                                <div className="flex gap-2 w-full sm:w-auto">
+                                    <select value={filterTag} onChange={e => setFilterTag(e.target.value)} className="bg-stone-800 border border-stone-600 rounded p-1.5 text-xs text-white outline-none flex-1">
+                                        <option value="all">Todas las etiquetas</option>
+                                        <option value="complete">✅ Datos Completos</option>
+                                        <option value="missing_name">❌ Falta Nombre</option>
+                                        <option value="missing_lastName">❌ Falta Apellido</option>
+                                        <option value="missing_phone">❌ Falta Celular</option>
+                                        <option value="missing_user">❌ Falta Usuario</option>
+                                        <option value="missing_pass">❌ Falta Clave</option>
                                     </select>
-                                    <button onClick={() => { setPlayerForm({name:'',lastName:'',alias:'',phone:'',photoUrl:'',username:'',password:'',baseMatches:0,basePoints:0,baseGoals:0,baseWins:0,position:''}); setEditingPlayerId(null); setIsAddingPlayer(true); }} className="bg-pitch-600 hover:bg-pitch-500 text-white text-[9px] sm:text-xs px-2 py-1 rounded font-bold transition-colors shrink-0">
+                                    <button onClick={() => { setPlayerForm({name:'', lastName:'', alias:'', phone:'', photoUrl:'', username:'', password:'', baseMatches:0, basePoints:0, baseGoals:0, baseWins:0, position:''}); setEditingPlayerId(null); setIsAddingPlayer(true); }} className="bg-pitch-600 hover:bg-pitch-500 text-white text-xs px-3 py-1.5 rounded font-bold transition-colors shrink-0">
                                         + Añadir
                                     </button>
                                 </div>
                             </div>
-                            <div className="max-h-40 sm:max-h-64 overflow-y-auto space-y-1.5 sm:space-y-2 pr-1 sm:pr-2 custom-scrollbar">
+                            <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                 {filteredPlayers.map(p => (
                                     <div key={p.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-stone-800 p-3 rounded-lg border border-stone-700 gap-2">
                                         <div className="flex items-center gap-3">
@@ -1230,7 +1292,7 @@
                                 </div>
                             </div>
                             <div className="bg-stone-900/30 p-3 rounded-lg border border-stone-700 mt-2">
-                                <p className="text-xs text-stone-400 mb-2 font-semibold">Estadísticas Base (Importadas externamente).</p>
+                                <p className="text-xs text-stone-400 mb-2 font-semibold">Estadísticas Base (Importadas externamente). El sistema sumará a esto los partidos jugados en esta app automáticamente.</p>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                     <div><label className="block text-[10px] text-stone-400 mb-1">P. Jugados</label><input type="number" value={playerForm.baseMatches} onChange={e => setPlayerForm({...playerForm, baseMatches: Number(e.target.value)})} className="w-full bg-stone-900 border border-stone-700 rounded p-1 text-white text-xs text-center outline-none" /></div>
                                     <div><label className="block text-[10px] text-stone-400 mb-1">Ptos Asist.</label><input type="number" step="0.5" value={playerForm.basePoints} onChange={e => setPlayerForm({...playerForm, basePoints: Number(e.target.value)})} className="w-full bg-stone-900 border border-stone-700 rounded p-1 text-white text-xs text-center outline-none" /></div>
@@ -1260,85 +1322,75 @@
             );
         }
 
-        // --- MAIN APP ---
         function App() {
-            const [dbState, setDbState] = useState(() => loadFromLS() || initialDB);
+            const [dbState, setDbState] = useState(initialDB);
             const [user, setUser] = useState(null);
             const [isSyncing, setIsSyncing] = useState(true);
+            
+            // Match Selector State
             const [selectedMatchId, setSelectedMatchId] = useState(null);
+            
+            // Roles y Sesión
             const [isAdmin, setIsAdmin] = useState(false);
             const [loggedPlayerId, setLoggedPlayerId] = useState(null);
+            
+            // Modales
             const [showLogin, setShowLogin] = useState(false);
             const [loginUser, setLoginUser] = useState('');
             const [loginPass, setLoginPass] = useState('');
             const [loginError, setLoginError] = useState('');
+            
             const [showAdminConfig, setShowAdminConfig] = useState(false);
             const [adminConfigForm, setAdminConfigForm] = useState({ username: '', password: '' });
+
             const [showProfileConfig, setShowProfileConfig] = useState(false);
             const [playerConfigForm, setPlayerConfigForm] = useState({});
             const [profileCropFile, setProfileCropFile] = useState(null);
-            const [useFirebase, setUseFirebase] = useState(false);
-            const unsubscribeRef = useRef(null);
 
-            // Firebase init
             useEffect(() => {
-                const onFirebaseReady = () => {
-                    if (window._firebaseReady && window.firebaseVars) {
-                        setUseFirebase(true);
-                        const { auth, signInWithCustomToken, signInAnonymously } = window.firebaseVars;
-                        const doAuth = async () => {
-                            try {
-                                if (typeof __initial_auth_token !== 'undefined') await signInWithCustomToken(auth, __initial_auth_token);
-                                else await signInAnonymously(auth);
-                                setUser(auth.currentUser);
-                            } catch (e) { setIsSyncing(false); }
-                        };
-                        doAuth();
-                    } else {
-                        setIsSyncing(false);
-                    }
+                const initApp = async () => {
+                    if (!window.firebaseVars) { setTimeout(initApp, 100); return; }
+                    const { auth, signInWithCustomToken, signInAnonymously } = window.firebaseVars;
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined') await signInWithCustomToken(auth, __initial_auth_token);
+                        else await signInAnonymously(auth);
+                        setUser(auth.currentUser);
+                    } catch (e) { console.error("Auth error", e); }
                 };
-                if (window._firebaseReady !== undefined && window._firebaseReady !== null) {
-                    // Already resolved
-                    setTimeout(onFirebaseReady, 0);
-                } else {
-                    window.addEventListener('firebaseInitDone', onFirebaseReady, { once: true });
-                    // Fallback timeout
-                    setTimeout(() => { if (isSyncing) setIsSyncing(false); }, 3000);
-                }
+                initApp();
             }, []);
 
             useEffect(() => {
-                if (!user || !useFirebase || !window.firebaseVars) return;
+                if (!user || !window.firebaseVars) return;
                 const { db, doc, onSnapshot, appId, setDoc } = window.firebaseVars;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_state', 'current');
                 const unsubscribe = onSnapshot(docRef, (snapshot) => {
                     if (snapshot.exists()) {
                         let data = snapshot.data();
+                        // Migración rápida si el esquema es antiguo
                         if (data.match && !data.matches) {
                             data.matches = [{ id: Date.now().toString(), ...data.match, status: 'upcoming' }];
                             delete data.match;
                             setDoc(docRef, data);
                         }
                         setDbState(data);
-                        saveToLS(data);
-                    } else {
-                        setDoc(docRef, dbState);
                     }
+                    else setDoc(docRef, initialDB);
                     setIsSyncing(false);
                 }, (err) => { console.error(err); setIsSyncing(false); });
-                unsubscribeRef.current = unsubscribe;
                 return () => unsubscribe();
-            }, [user, useFirebase]);
+            }, [user]);
 
-            // Match selector
+            // Set initial selected match
             useEffect(() => {
                 if (dbState.matches && dbState.matches.length > 0) {
                     const isValid = dbState.matches.some(m => m.id === selectedMatchId);
                     if (!selectedMatchId || !isValid) {
                         const upcoming = dbState.matches.find(m => m.status === 'upcoming');
-                        if (upcoming) setSelectedMatchId(upcoming.id);
-                        else {
+                        if (upcoming) {
+                            setSelectedMatchId(upcoming.id);
+                        } else {
+                            // Sort by date to get the latest match
                             const latest = [...dbState.matches].sort((a,b) => b.date.localeCompare(a.date))[0];
                             if (latest) setSelectedMatchId(latest.id);
                         }
@@ -1348,22 +1400,36 @@
                 }
             }, [dbState.matches, selectedMatchId]);
 
-            const updateState = useCallback(async (newState) => {
+            const updateState = async (newState) => {
                 setDbState(newState);
-                saveToLS(newState);
-                if (!user || !useFirebase || !window.firebaseVars) return;
+                if (!user || !window.firebaseVars) return;
                 const { db, doc, setDoc, appId } = window.firebaseVars;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'app_state', 'current');
                 try { await setDoc(docRef, newState); } catch (e) { console.error(e); }
-            }, [user, useFirebase]);
+            };
 
-            const updateCurrentMatch = useCallback((updatedMatch) => {
-                updateState({ ...dbState, matches: dbState.matches.map(m => m.id === updatedMatch.id ? updatedMatch : m) });
-            }, [dbState, updateState]);
+            const updateCurrentMatch = (updatedMatch) => {
+                const newMatches = dbState.matches.map(m => m.id === updatedMatch.id ? updatedMatch : m);
+                updateState({ ...dbState, matches: newMatches });
+            };
 
             const createNewMatch = () => {
                 const todayStr = new Date().toISOString().split('T')[0];
-                const newMatch = { id: Date.now().toString(), date: todayStr, startTime: "20:00", endTime: "22:00", location: "Cancha El Golazo", mapUrl: "", quota: 11.50, deadlineDate: todayStr, deadlineTime: "18:00", status: "upcoming", attendees: {}, teams: {}, goals: [] };
+                const newMatch = {
+                    id: Date.now().toString(),
+                    date: todayStr,
+                    startTime: "20:00",
+                    endTime: "22:00",
+                    location: "Cancha El Golazo",
+                    mapUrl: "",
+                    quota: 11.50,
+                    deadlineDate: todayStr,
+                    deadlineTime: "18:00",
+                    status: "upcoming",
+                    attendees: {},
+                    teams: {},
+                    goals: []
+                };
                 updateState({ ...dbState, matches: [newMatch, ...(dbState.matches || [])] });
                 setSelectedMatchId(newMatch.id);
             };
@@ -1374,23 +1440,40 @@
                 if (selectedMatchId === matchId) {
                     if (newMatches.length > 0) {
                         const upcoming = newMatches.find(m => m.status === 'upcoming');
-                        setSelectedMatchId(upcoming ? upcoming.id : [...newMatches].sort((a,b) => b.date.localeCompare(a.date))[0].id);
-                    } else setSelectedMatchId(null);
+                        if (upcoming) {
+                            setSelectedMatchId(upcoming.id);
+                        } else {
+                            const latest = [...newMatches].sort((a,b) => b.date.localeCompare(a.date))[0];
+                            setSelectedMatchId(latest.id);
+                        }
+                    } else {
+                        setSelectedMatchId(null);
+                    }
                 }
             };
 
+            // CORE LOGIC: Cálculo de Estadísticas Dinámicas
             const computedPlayers = useMemo(() => {
                 const players = dbState.players || [];
                 const matches = dbState.matches || [];
+
                 return players.map(p => {
-                    let computedMatches = p.baseMatches || 0, points = p.basePoints || 0, goals = p.baseGoals || 0, wins = p.baseWins || 0, teamMatches = 0;
+                    let computedMatches = p.baseMatches || 0;
+                    let points = p.basePoints || 0;
+                    let goals = p.baseGoals || 0;
+                    let wins = p.baseWins || 0;
+                    let teamMatches = 0; 
+
                     matches.forEach(m => {
                         if (m.status === 'completed') {
                             const status = m.attendees?.[p.id];
                             if (status === 'full') { computedMatches += 1; points += 1; }
                             else if (status === 'half') { computedMatches += 1; points += 0.5; }
-                            else if (status === 'absent') { computedMatches += 1; }
-                            goals += (m.goals || []).filter(g => g.playerId === p.id).length;
+                            else if (status === 'absent') { computedMatches += 1; points += 0; }
+                            
+                            const pGoals = (m.goals || []).filter(g => g.playerId === p.id).length;
+                            goals += pGoals;
+
                             const team = m.teams?.[p.id];
                             if (team && (status === 'full' || status === 'half' || status === 'free')) {
                                 teamMatches += 1;
@@ -1400,12 +1483,16 @@
                             }
                         }
                     });
+
                     const attendancePerc = computedMatches > 0 ? (points / computedMatches) * 100 : 0;
                     const winPerc = teamMatches > 0 ? (wins / teamMatches) * 100 : 0;
-                    let tier = 'C', tierColor = 'text-red-400', tierBg = 'bg-red-400/10 border-red-400/20';
+
+                    let tier = 'C', tierColor = 'text-stone-400', tierBg = 'bg-stone-400/10 border-stone-400/20';
                     if (attendancePerc >= 75) { tier = 'S'; tierColor = 'text-pitch-400'; tierBg = 'bg-pitch-400/10 border-pitch-400/20'; }
                     else if (attendancePerc >= 50) { tier = 'A'; tierColor = 'text-blue-400'; tierBg = 'bg-blue-400/10 border-blue-400/20'; }
                     else if (attendancePerc >= 25) { tier = 'B'; tierColor = 'text-gold'; tierBg = 'bg-gold/10 border-gold/20'; }
+                    else { tier = 'C'; tierColor = 'text-red-400'; tierBg = 'bg-red-400/10 border-red-400/20'; }
+
                     return { ...p, computedMatches, points, totalGoals: goals, wins, teamMatches, attendancePerc, winPerc, tier, tierColor, tierBg };
                 });
             }, [dbState.players, dbState.matches]);
@@ -1428,13 +1515,13 @@
 
             const handleLogout = () => { setIsAdmin(false); setLoggedPlayerId(null); };
 
-            useEffect(() => { if (showAdminConfig) setAdminConfigForm(dbState.adminCredentials || { username: 'admin', password: '1234' }); }, [showAdminConfig]);
+            useEffect(() => { if (showAdminConfig) setAdminConfigForm(dbState.adminCredentials || { username: 'admin', password: '1234' }); }, [showAdminConfig, dbState.adminCredentials]);
             useEffect(() => {
                 if (showProfileConfig && loggedPlayerId) {
                     const p = computedPlayers.find(x => x.id === loggedPlayerId);
                     if (p) setPlayerConfigForm(p);
                 }
-            }, [showProfileConfig, loggedPlayerId]);
+            }, [showProfileConfig, loggedPlayerId, computedPlayers]);
 
             const handleSaveAdminConfig = () => { updateState({ ...dbState, adminCredentials: adminConfigForm }); setShowAdminConfig(false); };
             const handleSavePlayerProfile = () => {
@@ -1446,7 +1533,8 @@
             const handleExportDB = () => {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dbState, null, 2));
                 const a = document.createElement('a');
-                a.setAttribute("href", dataStr); a.setAttribute("download", `pichanga_db_${new Date().toISOString().split('T')[0]}.json`);
+                a.setAttribute("href", dataStr);
+                a.setAttribute("download", `pichanga_db_${new Date().toISOString().split('T')[0]}.json`);
                 document.body.appendChild(a); a.click(); a.remove();
             };
 
@@ -1467,16 +1555,14 @@
             if (isSyncing) {
                 return (
                     <div className="min-h-screen bg-stone-900 flex items-center justify-center">
-                        <div className="text-center">
-                            <i className="ph-fill ph-soccer-ball text-6xl text-pitch-500 animate-spin mb-4 block"></i>
-                            <p className="text-pitch-400 font-bold animate-pulse">Cargando...</p>
-                        </div>
+                        <div className="text-center"><i className="ph-fill ph-soccer-ball text-6xl text-pitch-500 animate-spin mb-4 block"></i><p className="text-pitch-400 font-bold animate-pulse">Sincronizando...</p></div>
                     </div>
                 );
             }
 
             const currentMatch = dbState.matches?.find(m => m.id === selectedMatchId);
-
+            
+            // Historial personal para el Modal del Perfil
             const myHistory = dbState.matches?.filter(m => m.status === 'completed' && m.attendees?.[loggedPlayerId]).map(m => {
                 const st = m.attendees[loggedPlayerId];
                 const g = (m.goals || []).filter(x => x.playerId === loggedPlayerId).length;
@@ -1491,52 +1577,52 @@
 
             return (
                 <div className="min-h-screen pb-12 font-sans selection:bg-pitch-500 selection:text-white">
-                    {/* Header */}
                     <header className="bg-stone-900 border-b border-stone-800 sticky top-0 z-40 shadow-sm">
-                        <div className="max-w-5xl mx-auto px-4 py-1.5 sm:py-4 flex flex-col sm:flex-row justify-between items-center gap-1 sm:gap-4">
-                            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-center sm:justify-start">
-                                <div className="bg-gradient-to-br from-pitch-500 to-pitch-700 p-1.5 sm:p-2.5 rounded-xl text-white shadow-lg shadow-pitch-900/50 border border-pitch-400/30 shrink-0">
-                                    <i className="ph-fill ph-soccer-ball text-base sm:text-2xl"></i>
+                        <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
+                                <div className="bg-gradient-to-br from-pitch-500 to-pitch-700 p-2.5 rounded-xl text-white shadow-lg shadow-pitch-900/50 border border-pitch-400/30 shrink-0">
+                                    <i className="ph-fill ph-soccer-ball text-2xl"></i>
                                 </div>
                                 <div>
-                                    <h1 className="text-sm sm:text-xl font-bold text-choco-200 tracking-tight leading-tight">Pichanga Chocolatera</h1>
-                                    <p className="text-[9px] sm:text-xs text-pitch-400 font-medium">Gestor de Asistencias Oficial</p>
+                                    <h1 className="text-xl font-bold text-choco-200 tracking-tight leading-tight">Pichanga Chocolatera</h1>
+                                    <p className="text-xs text-pitch-400 font-medium">Gestor de Asistencias Oficial</p>
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-1 sm:gap-2 w-full sm:w-auto justify-center">
+                            
+                            <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-center">
                                 {!isAdmin && !loggedPlayerId && (
-                                    <button onClick={() => setShowLogin(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-6 py-1 sm:py-3 rounded-lg font-bold transition-colors bg-stone-800 text-stone-300 hover:text-white hover:bg-stone-700 border border-stone-700 shadow-sm text-xs sm:text-base">
-                                        <i className="ph-fill ph-sign-in text-xs sm:text-lg"></i> <span>Ingresar</span>
+                                    <button onClick={() => setShowLogin(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors bg-stone-800 text-stone-300 hover:text-white hover:bg-stone-700 border border-stone-700 shadow-sm">
+                                        <i className="ph-fill ph-sign-in text-lg"></i> <span>Ingresar</span>
                                     </button>
                                 )}
                                 {loggedPlayerId && (
-                                    <button onClick={() => setShowProfileConfig(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-6 py-1 sm:py-3 rounded-lg font-bold transition-colors bg-pitch-900/50 text-pitch-400 border border-pitch-700 hover:bg-pitch-800 shadow-sm text-xs sm:text-base">
-                                        <i className="ph-fill ph-user text-xs sm:text-lg"></i> <span className="whitespace-nowrap">Mi Perfil</span>
+                                    <button onClick={() => setShowProfileConfig(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors bg-pitch-900/50 text-pitch-400 border border-pitch-700 hover:bg-pitch-800 shadow-sm">
+                                        <i className="ph-fill ph-user text-lg"></i> <span className="whitespace-nowrap">Mi Perfil</span>
                                     </button>
                                 )}
                                 {isAdmin && (
-                                    <button onClick={() => setShowAdminConfig(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-6 py-1 sm:py-3 rounded-lg font-bold transition-colors bg-choco-900/50 text-choco-400 border border-choco-700 hover:bg-choco-800 shadow-sm text-xs sm:text-base">
-                                        <i className="ph-fill ph-gear text-xs sm:text-lg"></i> <span className="whitespace-nowrap">Admin Config</span>
+                                    <button onClick={() => setShowAdminConfig(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors bg-choco-900/50 text-choco-400 border border-choco-700 hover:bg-choco-800 shadow-sm">
+                                        <i className="ph-fill ph-gear text-lg"></i> <span className="whitespace-nowrap">Admin Config</span>
                                     </button>
                                 )}
                                 {(isAdmin || loggedPlayerId) && (
-                                    <button onClick={handleLogout} title="Cerrar Sesión" className="flex items-center justify-center px-2.5 sm:px-4 py-1 sm:py-3 rounded-lg font-bold transition-colors bg-stone-800 text-stone-400 hover:text-red-300 hover:bg-red-900/50 border border-stone-700">
-                                        <i className="ph-fill ph-sign-out text-sm sm:text-xl"></i>
+                                    <button onClick={handleLogout} title="Cerrar Sesión" className="flex items-center justify-center px-4 py-3 rounded-lg font-bold transition-colors bg-stone-800 text-stone-400 hover:text-red-300 hover:bg-red-900/50 border border-stone-700">
+                                        <i className="ph-fill ph-sign-out text-xl"></i>
                                     </button>
                                 )}
                             </div>
                         </div>
                     </header>
 
-                    {/* Barra de selección de fecha */}
-                    <div className="bg-stone-800/80 backdrop-blur-md border-b border-stone-700 py-3 px-4 z-30 sticky top-[75px] sm:top-[73px] shadow-sm">
+                    {/* Barra de Selección de Fecha Global */}
+                    <div className="bg-stone-800/80 backdrop-blur-md border-b border-stone-700 py-3 px-4 z-30 sticky top-[73px] sm:top-[73px] shadow-sm">
                         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
                             <div className="flex items-center gap-2 text-stone-300 font-semibold text-sm">
                                 <i className="ph-fill ph-calendar-check text-xl text-pitch-500"></i> Mostrando Pichanga del:
                             </div>
                             <div className="flex w-full sm:w-auto gap-2">
                                 <select value={selectedMatchId || ''} onChange={e => setSelectedMatchId(e.target.value)} className="bg-stone-900 border border-stone-600 rounded-lg p-2.5 text-white outline-none flex-1 font-medium text-sm capitalize">
-                                    {(dbState.matches || []).sort((a,b) => b.date.localeCompare(a.date)).map(m => (
+                                    {dbState.matches?.sort((a,b) => b.date.localeCompare(a.date)).map(m => (
                                         <option className="bg-stone-900 text-white" key={m.id} value={m.id}>{formatDateText(m.date) || m.date || 'Fecha por definir'} {m.status==='completed' ? '(Finalizada)' : '(Próxima)'}</option>
                                     ))}
                                 </select>
@@ -1562,7 +1648,7 @@
                                 )}
                             </section>
                         )}
-
+                        
                         {currentMatch?.status === 'completed' && (
                             <MatchHighlightsSection currentMatch={currentMatch} updateCurrentMatch={updateCurrentMatch} computedPlayers={computedPlayers} isAdmin={isAdmin} loggedPlayerId={loggedPlayerId} />
                         )}
@@ -1591,11 +1677,11 @@
                         )}
 
                         {isAdmin && <AdminPanel dbState={dbState} updateState={updateState} computedPlayers={computedPlayers} handleExportDB={handleExportDB} handleImportDB={handleImportDB} />}
-
+                        
                         <LeaderboardSection computedPlayers={computedPlayers} isAdmin={isAdmin} />
                     </main>
 
-                    {/* Modal Login */}
+                    {/* Modal: Login */}
                     <Modal isOpen={showLogin} onClose={() => {setShowLogin(false); setLoginError('');}} title="Ingresar a la Cancha">
                         <div className="space-y-4">
                             <p className="text-stone-400 text-sm">Ingresa con tu usuario y contraseña. Si eres admin, usa tus credenciales maestras.</p>
@@ -1612,7 +1698,7 @@
                         </div>
                     </Modal>
 
-                    {/* Modal Admin Config */}
+                    {/* Modal: Admin Config */}
                     <Modal isOpen={showAdminConfig} onClose={() => setShowAdminConfig(false)} title="Configuración de Administrador">
                         <div className="space-y-4">
                             <p className="text-stone-400 text-sm">Actualiza tus credenciales maestras. ¡No las olvides!</p>
@@ -1622,7 +1708,7 @@
                         </div>
                     </Modal>
 
-                    {/* Modal Perfil */}
+                    {/* Modal: Perfil del Jugador con Historial */}
                     <Modal isOpen={showProfileConfig} onClose={() => setShowProfileConfig(false)} title="Mi Perfil Chocolatero">
                         <div className="space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar pr-2">
                             <div className="flex justify-center mb-4 relative">
@@ -1640,6 +1726,7 @@
                                 <div className="border-x border-stone-700"><p className="text-[10px] text-stone-400 uppercase tracking-widest">Goles</p><p className="text-xl font-black text-white">{playerConfigForm.totalGoals}</p></div>
                                 <div><p className="text-[10px] text-stone-400 uppercase tracking-widest">% Win</p><p className="text-xl font-black text-blue-400">{playerConfigForm.winPerc?.toFixed(0)}%</p></div>
                             </div>
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div><label className="block text-sm text-stone-400 mb-1">Nombre</label><input type="text" value={playerConfigForm.name || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, name: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
                                 <div><label className="block text-sm text-stone-400 mb-1">Apellido</label><input type="text" value={playerConfigForm.lastName || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, lastName: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
@@ -1651,11 +1738,11 @@
                             <div>
                                 <label className="block text-sm text-stone-400 mb-1">Mi Posición en Cancha</label>
                                 <select value={playerConfigForm.position || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, position: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none text-sm">
-                                    <option value="">No definida</option>
-                                    <option value="ARQ">Arquero (ARQ)</option>
-                                    <option value="DEF">Defensa (DEF)</option>
-                                    <option value="MED">Medio (MED)</option>
-                                    <option value="DEL">Delantero (DEL)</option>
+                                    <option className="bg-stone-900 text-white" value="">No definida</option>
+                                    <option className="bg-stone-900 text-white" value="ARQ">Arquero (ARQ)</option>
+                                    <option className="bg-stone-900 text-white" value="DEF">Defensa (DEF)</option>
+                                    <option className="bg-stone-900 text-white" value="MED">Medio (MED)</option>
+                                    <option className="bg-stone-900 text-white" value="DEL">Delantero (DEL)</option>
                                 </select>
                             </div>
                             <div className="bg-stone-900/50 p-3 rounded-lg border border-stone-700 mt-2">
@@ -1665,6 +1752,7 @@
                                     <div><label className="block text-xs text-stone-400 mb-1">Nueva Contraseña</label><input type="text" value={playerConfigForm.password || ''} onChange={e => setPlayerConfigForm({...playerConfigForm, password: e.target.value})} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-white focus:border-pitch-500 outline-none" /></div>
                                 </div>
                             </div>
+
                             <div className="mt-6 pt-4 border-t border-stone-700">
                                 <h4 className="text-white font-bold mb-3 flex items-center gap-2"><i className="ph-fill ph-clock-counter-clockwise text-pitch-400"></i> Mi Historial de Asistencias</h4>
                                 {myHistory.length === 0 ? (
@@ -1692,6 +1780,7 @@
                                     </div>
                                 )}
                             </div>
+
                             <button onClick={handleSavePlayerProfile} className="w-full bg-pitch-600 hover:bg-pitch-500 py-3 rounded-lg text-white font-bold mt-4 transition-colors sticky bottom-0">Guardar Mis Cambios</button>
                         </div>
                     </Modal>
@@ -1701,6 +1790,7 @@
             );
         }
 
+        // Render App
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
