@@ -570,34 +570,38 @@
                             absent:          { c:'text-red-400',   bg:'bg-red-400/10',   b:'border-red-400/20',   i:'ph-fill ph-x-circle',         label:'Faltó' },
                             excused:         { c:'text-stone-400', bg:'bg-stone-400/10', b:'border-stone-400/20', i:'ph-fill ph-first-aid',        label:'Justificado' },
                         };
+                        const canEdit = isAdmin && !isCompleted;
                         return (
-                    <div className="grid grid-cols-2 md:grid-cols-2 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
                         {convocadosList.map(player => {
                             const status = attendeesMap[player.id];
                             const bd = BADGE[status];
                             return (
-                                <div key={player.id} className="flex items-center gap-2 sm:gap-3 bg-stone-900 p-2 sm:p-3 rounded-xl border border-stone-700">
-                                    <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0" />
+                                <div key={player.id} className="flex items-start gap-2 sm:gap-3 bg-stone-900 p-2 sm:p-3 rounded-xl border border-stone-700">
+                                    <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0 mt-0.5" />
                                     <div className="min-w-0 flex-1">
-                                        <p className="font-semibold text-stone-100 text-[10px] sm:text-base leading-tight truncate">{formatPlayerName(player, isAdmin)}</p>
-                                        {isAdmin && player.phone && <p className="text-[7px] sm:text-xs text-stone-500 font-mono truncate" data-html2canvas-ignore="true"><i className="ph ph-whatsapp logo text-pitch-500"></i> {player.phone}</p>}
-                                        {bd && (
-                                            <div className={`mt-1 inline-flex items-center gap-1 ${bd.c} ${bd.bg} border ${bd.b} px-1 sm:px-1.5 py-0.5 rounded text-[7px] sm:text-[10px] font-semibold`}>
-                                                <i className={bd.i}></i> {bd.label}
-                                            </div>
+                                        <p className="font-semibold text-stone-100 text-[10px] sm:text-base leading-tight break-words">{formatPlayerName(player, isAdmin)}</p>
+                                        {/* Edición: solo select (sin badge redundante) */}
+                                        {canEdit ? (
+                                            <select data-html2canvas-ignore="true" value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)}
+                                                className={`mt-1 w-full text-[9px] sm:text-sm border rounded-md px-1 py-0.5 focus:border-pitch-500 outline-none shrink-0 font-semibold ${bd ? `${bd.c} ${bd.bg} border-stone-600` : 'text-stone-300 bg-stone-800 border-stone-600'}`}>
+                                                <option className="bg-stone-900 text-white" value="full">✔️ Adelanto Confirmado</option>
+                                                <option className="bg-stone-900 text-white" value="half">🌗 Medio Cupo</option>
+                                                <option className="bg-stone-900 text-white" value="free">🎁 Invitado</option>
+                                                <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta Adelanto</option>
+                                                <option className="bg-stone-900 text-white" value="absent">❌ Faltó</option>
+                                                <option className="bg-stone-900 text-white" value="excused">🏥 Justificado</option>
+                                                <option className="bg-stone-900 text-red-400" value="none">🗑️ Quitar</option>
+                                            </select>
+                                        ) : (
+                                            /* Vista pública: solo badge */
+                                            bd && (
+                                                <div className={`mt-1 inline-flex items-center gap-1 ${bd.c} ${bd.bg} border ${bd.b} px-1.5 py-0.5 rounded text-[8px] sm:text-[11px] font-semibold`}>
+                                                    <i className={bd.i}></i> {bd.label}
+                                                </div>
+                                            )
                                         )}
                                     </div>
-                                    {isAdmin && !isCompleted && (
-                                        <select data-html2canvas-ignore="true" value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)} className="bg-stone-800 text-[8px] sm:text-sm border border-stone-600 rounded-md p-1 focus:border-pitch-500 outline-none text-stone-200 shrink-0 max-w-[72px] sm:max-w-none">
-                                            <option className="bg-stone-900 text-white" value="full">✔️ Confirmado</option>
-                                            <option className="bg-stone-900 text-white" value="half">🌗 Medio</option>
-                                            <option className="bg-stone-900 text-white" value="free">🎁 Invitado</option>
-                                            <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta Adel.</option>
-                                            <option className="bg-stone-900 text-white" value="absent">❌ Faltó</option>
-                                            <option className="bg-stone-900 text-white" value="excused">🏥 Justif.</option>
-                                            <option className="bg-stone-900 text-red-400 font-semibold" value="none">🗑️ Quitar</option>
-                                        </select>
-                                    )}
                                 </div>
                             );
                         })}
@@ -1156,21 +1160,19 @@
                                     </button>
                                 </div>
                             </div>
-                            <div className="max-h-40 sm:max-h-64 overflow-y-auto space-y-1.5 sm:space-y-2 pr-1 sm:pr-2 custom-scrollbar">
+                            <div className="max-h-40 sm:max-h-64 overflow-y-auto space-y-1 sm:space-y-2 pr-1 sm:pr-2 custom-scrollbar">
                                 {filteredPlayers.map(p => (
-                                    <div key={p.id} className="flex flex-row justify-between items-center bg-stone-800 p-1.5 sm:p-3 rounded-lg border border-stone-700 gap-1 sm:gap-2">
-                                        <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-1">
-                                            <PlayerAvatar player={p} className="w-6 h-6 sm:w-8 sm:h-8 text-[10px] sm:text-xs shrink-0" />
-                                            <div className="min-w-0">
-                                                <span className="font-medium text-stone-200 block text-[10px] sm:text-sm truncate">{formatPlayerName(p, true)}</span>
-                                                <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5">
-                                                    {p.tags.map(t => <span key={t.id} className={`text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded border ${t.color}`}>{t.label}</span>)}
-                                                </div>
+                                    <div key={p.id} className="flex flex-row items-center bg-stone-800 p-1.5 sm:p-3 rounded-lg border border-stone-700 gap-1.5 sm:gap-2">
+                                        <PlayerAvatar player={p} className="w-6 h-6 sm:w-8 sm:h-8 text-[9px] sm:text-xs shrink-0" />
+                                        <div className="min-w-0 flex-1 overflow-hidden">
+                                            <span className="font-medium text-stone-200 block text-[9px] sm:text-sm leading-tight">{p.name}{p.lastName ? ` ${p.lastName}` : ''}</span>
+                                            <div className="flex flex-nowrap gap-0.5 mt-0.5 overflow-hidden">
+                                                {p.tags.map(t => <span key={t.id} className={`text-[7px] sm:text-[9px] px-1 py-0.5 rounded border whitespace-nowrap ${t.color}`}>{t.label}</span>)}
                                             </div>
                                         </div>
                                         <div className="flex gap-1 sm:gap-2 shrink-0">
-                                            <button onClick={() => editPlayer(p.id)} className="text-stone-400 hover:text-white transition-colors bg-stone-700 hover:bg-stone-600 p-1 sm:p-1.5 rounded"><i className="ph ph-pencil-simple text-xs sm:text-base"></i></button>
-                                            <button onClick={() => setPlayerToDelete(p.id)} className="text-red-400 hover:text-red-300 transition-colors bg-red-900/30 hover:bg-red-900/60 p-1 sm:p-1.5 rounded"><i className="ph ph-trash text-xs sm:text-base"></i></button>
+                                            <button onClick={() => editPlayer(p.id)} className="text-stone-400 hover:text-white transition-colors bg-stone-700 hover:bg-stone-600 p-1 sm:p-1.5 rounded"><i className="ph ph-pencil-simple text-[10px] sm:text-sm"></i></button>
+                                            <button onClick={() => setPlayerToDelete(p.id)} className="text-red-400 hover:text-red-300 transition-colors bg-red-900/30 hover:bg-red-900/60 p-1 sm:p-1.5 rounded"><i className="ph ph-trash text-[10px] sm:text-sm"></i></button>
                                         </div>
                                     </div>
                                 ))}
