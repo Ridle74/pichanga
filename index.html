@@ -529,8 +529,8 @@
                                 <i className="ph-fill ph-users-three text-pitch-400"></i> Convocados
                             </h2>
                             <p className="text-stone-400 text-[10px] sm:text-sm mt-0.5">
-                                {convocadosList.length} Chocolateros {isAdmin && <span>• Recaudado: <span className="text-pitch-400 font-bold">S/ {totalCollected.toFixed(2)}</span></span>}
-                            </p>
+                            {convocadosList.length} Chocolateros {isAdmin && <span data-html2canvas-ignore="true">• Recaudado: <span className="text-pitch-400 font-bold">S/ {totalCollected.toFixed(2)}</span></span>}
+                        </p>
                         </div>
                         <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto" data-html2canvas-ignore="true">
                             {isAdmin && (
@@ -561,37 +561,42 @@
                         </div>
                     </div>
 
+                    {(() => {
+                        const BADGE = {
+                            full:            { c:'text-pitch-400', bg:'bg-pitch-400/10', b:'border-pitch-400/20', i:'ph-fill ph-check-circle',   label:'Adelanto Confirmado' },
+                            half:            { c:'text-gold',      bg:'bg-gold/10',      b:'border-gold/20',      i:'ph-fill ph-star-half',        label:'Medio Cupo' },
+                            free:            { c:'text-blue-400',  bg:'bg-blue-400/10',  b:'border-blue-400/20',  i:'ph-fill ph-gift',             label:'Invitado' },
+                            pending_payment: { c:'text-red-400',   bg:'bg-red-400/10',   b:'border-red-400/20',   i:'ph-fill ph-warning-circle',   label:'Falta Adelanto' },
+                            absent:          { c:'text-red-400',   bg:'bg-red-400/10',   b:'border-red-400/20',   i:'ph-fill ph-x-circle',         label:'Faltó' },
+                            excused:         { c:'text-stone-400', bg:'bg-stone-400/10', b:'border-stone-400/20', i:'ph-fill ph-first-aid',        label:'Justificado' },
+                        };
+                        return (
                     <div className="grid grid-cols-2 md:grid-cols-2 gap-2 sm:gap-3">
                         {convocadosList.map(player => {
                             const status = attendeesMap[player.id];
+                            const bd = BADGE[status];
                             return (
-                                <div key={player.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-stone-900 p-2 sm:p-3 rounded-xl border border-stone-700 gap-2">
-                                    <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
-                                        <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0" />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-semibold text-stone-100 text-[10px] sm:text-base truncate">{formatPlayerName(player, isAdmin)}</p>
-                                            {isAdmin && player.phone && <p className="text-[8px] sm:text-xs text-stone-500 font-mono truncate" data-html2canvas-ignore="true"><i className="ph ph-whatsapp logo text-pitch-500"></i> {player.phone}</p>}
-                                        </div>
+                                <div key={player.id} className="flex items-center gap-2 sm:gap-3 bg-stone-900 p-2 sm:p-3 rounded-xl border border-stone-700">
+                                    <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-stone-100 text-[10px] sm:text-base leading-tight truncate">{formatPlayerName(player, isAdmin)}</p>
+                                        {isAdmin && player.phone && <p className="text-[7px] sm:text-xs text-stone-500 font-mono truncate" data-html2canvas-ignore="true"><i className="ph ph-whatsapp logo text-pitch-500"></i> {player.phone}</p>}
+                                        {bd && (
+                                            <div className={`mt-1 inline-flex items-center gap-1 ${bd.c} ${bd.bg} border ${bd.b} px-1 sm:px-1.5 py-0.5 rounded text-[7px] sm:text-[10px] font-semibold`}>
+                                                <i className={bd.i}></i> {bd.label}
+                                            </div>
+                                        )}
                                     </div>
-                                    {isAdmin && !isCompleted ? (
-                                        <select value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)} className="bg-stone-800 text-[8px] sm:text-sm border border-stone-600 rounded-md p-1 focus:border-pitch-500 outline-none text-stone-200 shrink-0 w-full sm:w-auto">
-                                            <option className="bg-stone-900 text-white" value="full">✔️ Completo</option>
+                                    {isAdmin && !isCompleted && (
+                                        <select data-html2canvas-ignore="true" value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)} className="bg-stone-800 text-[8px] sm:text-sm border border-stone-600 rounded-md p-1 focus:border-pitch-500 outline-none text-stone-200 shrink-0 max-w-[72px] sm:max-w-none">
+                                            <option className="bg-stone-900 text-white" value="full">✔️ Confirmado</option>
                                             <option className="bg-stone-900 text-white" value="half">🌗 Medio</option>
-                                            <option className="bg-stone-900 text-white" value="free">🎁 Gratis</option>
-                                            <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta pago</option>
+                                            <option className="bg-stone-900 text-white" value="free">🎁 Invitado</option>
+                                            <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta Adel.</option>
                                             <option className="bg-stone-900 text-white" value="absent">❌ Faltó</option>
                                             <option className="bg-stone-900 text-white" value="excused">🏥 Justif.</option>
                                             <option className="bg-stone-900 text-red-400 font-semibold" value="none">🗑️ Quitar</option>
                                         </select>
-                                    ) : (
-                                        <div className="text-[8px] sm:text-sm font-medium shrink-0 w-full sm:w-auto flex justify-start sm:justify-end">
-                                            {status === 'full' && <span className="text-pitch-400 bg-pitch-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-pitch-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-check-circle"></i> <span className="hidden sm:inline">Va Completo</span><span className="sm:hidden">Full</span></span>}
-                                            {status === 'half' && <span className="text-gold bg-gold/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-gold/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-star-half"></i> <span className="hidden sm:inline">Medio Cupo</span><span className="sm:hidden">Mitad</span></span>}
-                                            {status === 'free' && <span className="text-blue-400 bg-blue-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-blue-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-gift"></i> <span className="hidden sm:inline">Invitado</span><span className="sm:hidden">Free</span></span>}
-                                            {status === 'pending_payment' && <span className="text-red-400 bg-red-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-red-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-warning-circle"></i> <span className="hidden sm:inline">Falta Adelantar</span><span className="sm:hidden">Debe</span></span>}
-                                            {status === 'absent' && <span className="text-red-400 bg-red-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-red-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-x-circle"></i> Faltó</span>}
-                                            {status === 'excused' && <span className="text-stone-400 bg-stone-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-stone-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-first-aid"></i> <span className="hidden sm:inline">Justificado</span><span className="sm:hidden">Justif.</span></span>}
-                                        </div>
                                     )}
                                 </div>
                             );
@@ -603,6 +608,8 @@
                             </div>
                         )}
                     </div>
+                        );
+                    })()}
 
                     <Modal isOpen={showAddModal} onClose={() => {setShowAddModal(false); setSearchTerm("");}} title="Armar Convocatoria">
                         <div className="space-y-4">
@@ -1113,9 +1120,9 @@
             };
 
             return (
-                <section className="bg-stone-800 border-2 border-choco-600 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+                <section className="bg-stone-800 border-2 border-choco-600 rounded-2xl p-3 sm:p-6 shadow-2xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 bg-choco-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">MODO ADMIN</div>
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-6 mt-2"><i className="ph-fill ph-database text-choco-400"></i> Base de Datos</h2>
+                    <h2 className="text-base sm:text-2xl font-bold text-white flex items-center gap-2 mb-3 sm:mb-6 mt-1 sm:mt-2"><i className="ph-fill ph-database text-choco-400"></i> Base de Datos</h2>
 
                     <div className="grid grid-cols-2 gap-3 sm:gap-6">
                         <div className="bg-stone-900 rounded-xl p-2.5 sm:p-5 border border-stone-700 flex flex-col justify-between">
@@ -1151,19 +1158,19 @@
                             </div>
                             <div className="max-h-40 sm:max-h-64 overflow-y-auto space-y-1.5 sm:space-y-2 pr-1 sm:pr-2 custom-scrollbar">
                                 {filteredPlayers.map(p => (
-                                    <div key={p.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-stone-800 p-3 rounded-lg border border-stone-700 gap-2">
-                                        <div className="flex items-center gap-3">
-                                            <PlayerAvatar player={p} className="w-8 h-8 text-xs shrink-0" />
-                                            <div>
-                                                <span className="font-medium text-stone-200 block">{formatPlayerName(p, true)}</span>
-                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                    {p.tags.map(t => <span key={t.id} className={`text-[9px] px-1.5 py-0.5 rounded border ${t.color}`}>{t.label}</span>)}
+                                    <div key={p.id} className="flex flex-row justify-between items-center bg-stone-800 p-1.5 sm:p-3 rounded-lg border border-stone-700 gap-1 sm:gap-2">
+                                        <div className="flex items-center gap-1 sm:gap-3 min-w-0 flex-1">
+                                            <PlayerAvatar player={p} className="w-6 h-6 sm:w-8 sm:h-8 text-[10px] sm:text-xs shrink-0" />
+                                            <div className="min-w-0">
+                                                <span className="font-medium text-stone-200 block text-[10px] sm:text-sm truncate">{formatPlayerName(p, true)}</span>
+                                                <div className="flex flex-wrap gap-0.5 sm:gap-1 mt-0.5">
+                                                    {p.tags.map(t => <span key={t.id} className={`text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded border ${t.color}`}>{t.label}</span>)}
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2 shrink-0 self-end sm:self-auto">
-                                            <button onClick={() => editPlayer(p.id)} className="text-stone-400 hover:text-white transition-colors bg-stone-700 hover:bg-stone-600 p-1.5 rounded"><i className="ph ph-pencil-simple"></i></button>
-                                            <button onClick={() => setPlayerToDelete(p.id)} className="text-red-400 hover:text-red-300 transition-colors bg-red-900/30 hover:bg-red-900/60 p-1.5 rounded"><i className="ph ph-trash"></i></button>
+                                        <div className="flex gap-1 sm:gap-2 shrink-0">
+                                            <button onClick={() => editPlayer(p.id)} className="text-stone-400 hover:text-white transition-colors bg-stone-700 hover:bg-stone-600 p-1 sm:p-1.5 rounded"><i className="ph ph-pencil-simple text-xs sm:text-base"></i></button>
+                                            <button onClick={() => setPlayerToDelete(p.id)} className="text-red-400 hover:text-red-300 transition-colors bg-red-900/30 hover:bg-red-900/60 p-1 sm:p-1.5 rounded"><i className="ph ph-trash text-xs sm:text-base"></i></button>
                                         </div>
                                     </div>
                                 ))}
