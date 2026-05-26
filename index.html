@@ -584,7 +584,7 @@
                                         {/* Edición: solo select (sin badge redundante) */}
                                         {canEdit ? (
                                             <select data-html2canvas-ignore="true" value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)}
-                                                className={`mt-1 w-full text-[9px] sm:text-sm border rounded-md px-1 py-0.5 focus:border-pitch-500 outline-none shrink-0 font-semibold ${bd ? `${bd.c} ${bd.bg} border-stone-600` : 'text-stone-300 bg-stone-800 border-stone-600'}`}>
+                                                className={`mt-1 w-full text-[7px] sm:text-sm border rounded-md px-1 py-0.5 focus:border-pitch-500 outline-none shrink-0 font-semibold ${bd ? `${bd.c} ${bd.bg} border-stone-600` : 'text-stone-300 bg-stone-800 border-stone-600'}`}>
                                                 <option className="bg-stone-900 text-white" value="full">✔️ Adelanto Confirmado</option>
                                                 <option className="bg-stone-900 text-white" value="half">🌗 Medio Cupo</option>
                                                 <option className="bg-stone-900 text-white" value="free">🎁 Invitado</option>
@@ -596,7 +596,7 @@
                                         ) : (
                                             /* Vista pública: solo badge */
                                             bd && (
-                                                <div className={`mt-1 inline-flex items-center gap-1 ${bd.c} ${bd.bg} border ${bd.b} px-1.5 py-0.5 rounded text-[8px] sm:text-[11px] font-semibold`}>
+                                                <div className={`mt-1 inline-flex items-center gap-0.5 ${bd.c} ${bd.bg} border ${bd.b} px-1 py-0.5 rounded text-[6px] sm:text-[10px] font-semibold whitespace-nowrap`}>
                                                     <i className={bd.i}></i> {bd.label}
                                                 </div>
                                             )
@@ -1162,17 +1162,17 @@
                             </div>
                             <div className="max-h-40 sm:max-h-64 overflow-y-auto space-y-1 sm:space-y-2 pr-1 sm:pr-2 custom-scrollbar">
                                 {filteredPlayers.map(p => (
-                                    <div key={p.id} className="flex flex-row items-center bg-stone-800 p-1.5 sm:p-3 rounded-lg border border-stone-700 gap-1.5 sm:gap-2">
-                                        <PlayerAvatar player={p} className="w-6 h-6 sm:w-8 sm:h-8 text-[9px] sm:text-xs shrink-0" />
+                                    <div key={p.id} className="flex flex-row items-center bg-stone-800 p-1 sm:p-3 rounded-lg border border-stone-700 gap-1 sm:gap-2">
+                                        <PlayerAvatar player={p} className="w-5 h-5 sm:w-8 sm:h-8 text-[8px] sm:text-xs shrink-0" />
                                         <div className="min-w-0 flex-1 overflow-hidden">
-                                            <span className="font-medium text-stone-200 block text-[9px] sm:text-sm leading-tight">{p.name}{p.lastName ? ` ${p.lastName}` : ''}</span>
+                                            <span className="font-medium text-stone-200 block text-[8px] sm:text-sm leading-tight">{p.name}{p.lastName ? ` ${p.lastName}` : ''}</span>
                                             <div className="flex flex-nowrap gap-0.5 mt-0.5 overflow-hidden">
-                                                {p.tags.map(t => <span key={t.id} className={`text-[7px] sm:text-[9px] px-1 py-0.5 rounded border whitespace-nowrap ${t.color}`}>{t.label}</span>)}
+                                                {p.tags.map(t => <span key={t.id} className={`text-[6px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded border whitespace-nowrap ${t.color}`}>{t.label}</span>)}
                                             </div>
                                         </div>
-                                        <div className="flex gap-1 sm:gap-2 shrink-0">
-                                            <button onClick={() => editPlayer(p.id)} className="text-stone-400 hover:text-white transition-colors bg-stone-700 hover:bg-stone-600 p-1 sm:p-1.5 rounded"><i className="ph ph-pencil-simple text-[10px] sm:text-sm"></i></button>
-                                            <button onClick={() => setPlayerToDelete(p.id)} className="text-red-400 hover:text-red-300 transition-colors bg-red-900/30 hover:bg-red-900/60 p-1 sm:p-1.5 rounded"><i className="ph ph-trash text-[10px] sm:text-sm"></i></button>
+                                        <div className="flex gap-0.5 sm:gap-2 shrink-0">
+                                            <button onClick={() => editPlayer(p.id)} className="text-stone-400 hover:text-white bg-stone-700 hover:bg-stone-600 p-0.5 sm:p-1.5 rounded transition-colors"><i className="ph ph-pencil-simple text-[9px] sm:text-sm"></i></button>
+                                            <button onClick={() => setPlayerToDelete(p.id)} className="text-red-400 hover:text-red-300 bg-red-900/30 hover:bg-red-900/60 p-0.5 sm:p-1.5 rounded transition-colors"><i className="ph ph-trash text-[9px] sm:text-sm"></i></button>
                                         </div>
                                     </div>
                                 ))}
