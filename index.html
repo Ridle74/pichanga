@@ -14,31 +14,30 @@
     
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
     <script type="module">
-        // 1. Importamos las herramientas de Firebase EXACTAS que tu código necesita
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 2. TUS LLAVES (La caja fuerte) - Inyectadas directamente sin tocar lógica extraña
+        // Tus credenciales de Firebase configuradas
         const firebaseConfig = {
-            apiKey: "AIzaSyBinanH1KCpAYL58VQBT2KKCOnzUFMhof8",
-            authDomain: "pichanga-chocolatera.firebaseapp.com",
-            projectId: "pichanga-chocolatera",
-            storageBucket: "pichanga-chocolatera.firebasestorage.app",
-            messagingSenderId: "27861650922",
-            appId: "1:27861650922:web:bf670c886d54f358c57693"
+          apiKey: "AIzaSyBinanH1KCpAYL58VQBT2KKCOnzUFMhof8",
+          authDomain: "pichanga-chocolatera.firebaseapp.com",
+          projectId: "pichanga-chocolatera",
+          storageBucket: "pichanga-chocolatera.firebasestorage.app",
+          messagingSenderId: "27861650922",
+          appId: "1:27861650922:web:bf670c886d54f358c57693"
         };
-        
-        // El appId lo usamos como nombre de tu tabla en la base de datos
         const appId = firebaseConfig.appId;
 
-        // 3. Inicializamos Firebase con TUS llaves
+        // Inicializamos Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // 4. Exportamos las variables para que TU código React (abajo) las pueda usar sin romperse
+        // Exportamos variables globalmente para que React las pueda usar
         window.firebaseVars = { app, auth, db, doc, setDoc, onSnapshot, collection, signInAnonymously, signInWithCustomToken, appId };
     </script>
 
@@ -105,6 +104,29 @@
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- FORMATTERS ---
+        const formatDateShort = (dateStr) => {
+            if (!dateStr) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                const [y, m, d] = dateStr.split('-');
+                const date = new Date(y, m - 1, d);
+                const options = { weekday: 'long', month: 'long', day: 'numeric' };
+                let res = date.toLocaleDateString('es-ES', options).replace(',', '');
+                return res.charAt(0).toUpperCase() + res.slice(1);
+            }
+            return dateStr;
+        };
+
+        const formatTimeOnly = (timeStr) => {
+            if (!timeStr) return '';
+            if (/^\d{2}:\d{2}$/.test(timeStr)) {
+                let [h, m] = timeStr.split(':');
+                let hour = parseInt(h, 10);
+                hour = hour % 12 || 12;
+                return `${hour}:${m}`;
+            }
+            return timeStr;
+        };
+
         const formatDateText = (dateStr) => {
             if (!dateStr) return '';
             if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -130,10 +152,33 @@
         };
 
         const formatPlayerName = (player, isAdmin) => {
-            // isAdmin = true o cuando queremos forzar a que muestre nombre + apellido completo
             let name = `${player.name} ${player.lastName ? (isAdmin ? player.lastName : player.lastName.charAt(0) + '.') : ''}`;
             if (player.alias) name += ` "${player.alias}"`;
             return name;
+        };
+
+        // --- UTILS ---
+        const captureAndDownload = async (elementId, fileName, setDownloading) => {
+            if (!window.html2canvas) return;
+            setDownloading(true);
+            
+            await new Promise(r => setTimeout(r, 100));
+            
+            try {
+                const element = document.getElementById(elementId);
+                const canvas = await window.html2canvas(element, {
+                    scale: 3,
+                    useCORS: true,
+                    backgroundColor: '#1c1917'
+                });
+                const link = document.createElement("a");
+                link.href = canvas.toDataURL("image/png");
+                link.download = `${fileName}_${new Date().getTime()}.png`;
+                link.click();
+            } catch (err) {
+                console.error("Error al exportar la imagen", err);
+            }
+            setDownloading(false);
         };
 
         // --- MOCK INITIAL DATA ---
@@ -172,7 +217,7 @@
             const hasImage = player.photoUrl && !imgError;
 
             if (hasImage) {
-                return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)} className={`${className} rounded-full object-cover border border-pitch-500 shadow-inner bg-stone-900 shrink-0`} />;
+                return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)} className={`${className} rounded-full object-cover object-center border border-pitch-500 shadow-inner bg-stone-900 shrink-0`} />;
             }
             return (
                 <div className={`${className} shrink-0 rounded-full bg-gradient-to-br from-pitch-600 to-pitch-800 border border-pitch-500 flex items-center justify-center text-white font-bold uppercase shadow-inner`}>
@@ -198,21 +243,31 @@
                 }
             }, [file]);
 
+            const onImageLoad = (e) => {
+                const { naturalWidth, naturalHeight } = e.target;
+                const initialScale = Math.max(256 / naturalWidth, 256 / naturalHeight);
+                setScale(initialScale);
+                setPos({
+                    x: (256 - naturalWidth * initialScale) / 2,
+                    y: (256 - naturalHeight * initialScale) / 2
+                });
+            };
+
             const handleCrop = () => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
                 const img = imgRef.current;
                 
-                canvas.width = 200;
-                canvas.height = 200;
+                canvas.width = 256;
+                canvas.height = 256;
                 
-                ctx.clearRect(0, 0, 200, 200);
+                ctx.clearRect(0, 0, 256, 256);
                 
-                const drawWidth = img.width * scale;
-                const drawHeight = img.height * scale;
+                const drawWidth = img.naturalWidth * scale;
+                const drawHeight = img.naturalHeight * scale;
                 
                 ctx.drawImage(img, pos.x, pos.y, drawWidth, drawHeight);
-                onCropped(canvas.toDataURL('image/jpeg', 0.8));
+                onCropped(canvas.toDataURL('image/jpeg', 0.9));
             };
 
             if (!src) return null;
@@ -220,9 +275,10 @@
             return (
                 <Modal isOpen={true} onClose={onCancel} title="Recortar Imagen">
                     <div className="flex flex-col items-center space-y-6 overflow-hidden">
-                        <p className="text-stone-400 text-sm text-center">Arrastra la imagen y ajusta el zoom para centrar tu rostro.</p>
+                        <p className="text-stone-400 text-sm text-center">Arrastra la imagen y ajusta el zoom para centrar tu rostro en la cuadrícula.</p>
                         <div 
-                            className="relative w-64 h-64 bg-stone-900 border-2 border-dashed border-stone-600 rounded-full overflow-hidden cursor-move touch-none shadow-inner"
+                            className="relative bg-stone-900 border-2 border-dashed border-stone-500 rounded-full overflow-hidden cursor-move touch-none shadow-inner"
+                            style={{ width: '256px', height: '256px', boxSizing: 'content-box' }}
                             onMouseDown={e => { setIsDragging(true); setStartPos({ x: e.clientX - pos.x, y: e.clientY - pos.y }); }}
                             onMouseMove={e => { if (isDragging) setPos({ x: e.clientX - startPos.x, y: e.clientY - startPos.y }); }}
                             onMouseUp={() => setIsDragging(false)}
@@ -234,6 +290,7 @@
                             <img 
                                 ref={imgRef}
                                 src={src} 
+                                onLoad={onImageLoad}
                                 alt="Crop preview" 
                                 style={{ 
                                     transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`, 
@@ -242,10 +299,15 @@
                                     maxWidth: 'none'
                                 }} 
                             />
+                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                                <div className="w-full h-[1px] bg-white/40"></div>
+                                <div className="h-full w-[1px] bg-white/40 absolute"></div>
+                                <div className="w-3/4 h-3/4 border-2 border-white/30 rounded-full absolute"></div>
+                            </div>
                         </div>
                         <div className="w-full flex items-center gap-3">
                             <i className="ph-fill ph-image text-stone-500 text-xl"></i>
-                            <input type="range" min="0.1" max="3" step="0.1" value={scale} onChange={e => setScale(parseFloat(e.target.value))} className="w-full accent-pitch-500" />
+                            <input type="range" min="0.05" max="3" step="0.01" value={scale} onChange={e => setScale(parseFloat(e.target.value))} className="w-full accent-pitch-500" />
                             <i className="ph-fill ph-magnifying-glass-plus text-stone-500 text-xl"></i>
                         </div>
                         <div className="flex gap-2 w-full pt-2 border-t border-stone-700">
@@ -263,6 +325,7 @@
             const [isEditing, setIsEditing] = useState(false);
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
             const [formData, setFormData] = useState({});
+            const [yapeCopied, setYapeCopied] = useState(false);
 
             useEffect(() => {
                 if (currentMatch) setFormData({ ...currentMatch });
@@ -275,60 +338,79 @@
                 setIsEditing(false);
             };
 
+            const handleCopyYape = () => {
+                const yapeNumber = "918508591";
+                navigator.clipboard.writeText(yapeNumber).then(() => {
+                    setYapeCopied(true);
+                    setTimeout(() => setYapeCopied(false), 2000);
+                }).catch(() => {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = yapeNumber;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try { document.execCommand('copy'); setYapeCopied(true); setTimeout(() => setYapeCopied(false), 2000); } catch (err) {}
+                    document.body.removeChild(textArea);
+                });
+            };
+
             return (
-                <section className="bg-stone-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-stone-700/50 relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-6 relative z-10">
-                        <h2 className="text-xl sm:text-2xl font-bold text-pitch-400 flex items-center gap-2">
+                <section className="bg-stone-800 rounded-2xl p-3 sm:p-6 shadow-xl border border-stone-700/50 relative overflow-hidden">
+                    <div className="flex justify-between items-start mb-4 sm:mb-6 relative z-10">
+                        <h2 className="text-lg sm:text-2xl font-bold text-pitch-400 flex items-center gap-2">
                             <i className="ph-fill ph-calendar-check"></i> {currentMatch.status === 'completed' ? 'Partido Finalizado' : 'Próxima Pichanga'}
                         </h2>
                         {isAdmin && (
-                            <div className="flex gap-2">
-                                <button onClick={() => setShowDeleteConfirm(true)} className="text-red-400 hover:text-red-300 bg-red-900/30 p-2 rounded-lg transition-colors border border-red-900/50" title="Eliminar Partido">
-                                    <i className="ph ph-trash text-xl"></i>
+                            <div className="flex gap-1.5 sm:gap-2">
+                                <button onClick={() => setShowDeleteConfirm(true)} className="text-red-400 hover:text-red-300 bg-red-900/30 p-1.5 sm:p-2 rounded-lg transition-colors border border-red-900/50" title="Eliminar Partido">
+                                    <i className="ph ph-trash text-lg sm:text-xl"></i>
                                 </button>
-                                <button onClick={() => setIsEditing(true)} className="text-pitch-400 hover:text-pitch-300 bg-stone-700/50 p-2 rounded-lg transition-colors border border-stone-600" title="Editar Partido">
-                                    <i className="ph ph-pencil-simple text-xl"></i>
+                                <button onClick={() => setIsEditing(true)} className="text-pitch-400 hover:text-pitch-300 bg-stone-700/50 p-1.5 sm:p-2 rounded-lg transition-colors border border-stone-600" title="Editar Partido">
+                                    <i className="ph ph-pencil-simple text-lg sm:text-xl"></i>
                                 </button>
                             </div>
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
-                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
-                            <i className="ph-fill ph-calendar-blank text-2xl text-choco-400 mt-1"></i>
-                            <div>
-                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Fecha y Hora</p>
-                                <p className="font-bold text-sm sm:text-lg text-white capitalize">{formatDateText(currentMatch.date)}</p>
-                                <p className="text-xs sm:text-sm text-stone-300">{formatTimeText(currentMatch.startTime)} - {formatTimeText(currentMatch.endTime)}</p>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 relative z-10">
+                        <div className="flex items-start gap-2 bg-stone-900/50 p-2 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-calendar-blank text-lg sm:text-2xl text-choco-400 mt-0.5 sm:mt-1 shrink-0"></i>
+                            <div className="min-w-0">
+                                <p className="text-[10px] sm:text-sm text-stone-400 font-medium">Fecha y Hora</p>
+                                <p className="font-bold text-xs sm:text-base text-white capitalize truncate">{formatDateShort(currentMatch.date)}</p>
+                                <p className="text-[10px] sm:text-sm text-stone-300 truncate">{formatTimeOnly(currentMatch.startTime)} - {formatTimeText(currentMatch.endTime)}</p>
                             </div>
                         </div>
                         
-                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
-                            <i className="ph-fill ph-map-pin text-2xl text-choco-400 mt-1"></i>
-                            <div>
-                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Lugar</p>
+                        <div className="flex items-start gap-2 bg-stone-900/50 p-2 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-map-pin text-lg sm:text-2xl text-choco-400 mt-0.5 sm:mt-1 shrink-0"></i>
+                            <div className="min-w-0">
+                                <p className="text-[10px] sm:text-sm text-stone-400 font-medium">Lugar</p>
+                                <p className="font-bold text-xs sm:text-base text-white truncate" title={currentMatch.location}>{currentMatch.location}</p>
                                 {currentMatch.mapUrl ? (
-                                    <a href={currentMatch.mapUrl} target="_blank" className="font-bold text-sm sm:text-base text-blue-400 hover:underline">{currentMatch.location}</a>
+                                    <a href={currentMatch.mapUrl} target="_blank" rel="noreferrer" className="text-[10px] sm:text-sm text-blue-400 hover:text-blue-300 hover:underline truncate flex items-center gap-1 transition-colors"><i className="ph-bold ph-map-trifold"></i> Ver mapa</a>
                                 ) : (
-                                    <p className="font-bold text-sm sm:text-base text-white">{currentMatch.location}</p>
+                                    <p className="text-[10px] sm:text-sm text-stone-500 truncate">Sin ubicación</p>
                                 )}
                             </div>
                         </div>
 
-                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
-                            <i className="ph-fill ph-coins text-2xl text-pitch-500 mt-1"></i>
-                            <div>
-                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Cupo Completo</p>
-                                <p className="font-bold text-lg sm:text-xl text-pitch-400">S/ {Number(currentMatch.quota).toFixed(2)}</p>
+                        <div className="flex items-start gap-2 bg-stone-900/50 p-2 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-coins text-lg sm:text-2xl text-pitch-500 mt-0.5 sm:mt-1 shrink-0"></i>
+                            <div className="min-w-0 w-full">
+                                <p className="text-[10px] sm:text-sm text-stone-400 font-medium">Cupo</p>
+                                <p className="font-bold text-xs sm:text-base text-pitch-400 truncate">S/ {Number(currentMatch.quota).toFixed(2)}</p>
+                                <button onClick={handleCopyYape} className="text-[10px] sm:text-sm text-stone-300 hover:text-white truncate flex items-center gap-1 transition-colors w-full text-left" title="Copiar Yape">
+                                    {yapeCopied ? <><i className="ph-bold ph-check text-pitch-400"></i> <span className="text-pitch-400">¡Copiado!</span></> : <><i className="ph-bold ph-copy"></i> Yape: 918 508 591</>}
+                                </button>
                             </div>
                         </div>
 
-                        <div className="flex items-start gap-3 bg-stone-900/50 p-3 sm:p-4 rounded-xl border border-stone-700/50">
-                            <i className="ph-fill ph-clock-countdown text-2xl text-red-400 mt-1"></i>
-                            <div>
-                                <p className="text-xs sm:text-sm text-stone-400 font-medium">Plazo de Yapeo</p>
-                                <p className="font-bold text-xs sm:text-sm text-red-300 capitalize">{formatDateText(currentMatch.deadlineDate)}</p>
-                                <p className="text-xs sm:text-sm text-red-400">{formatTimeText(currentMatch.deadlineTime)}</p>
+                        <div className="flex items-start gap-2 bg-stone-900/50 p-2 sm:p-4 rounded-xl border border-stone-700/50">
+                            <i className="ph-fill ph-clock-countdown text-lg sm:text-2xl text-red-400 mt-0.5 sm:mt-1 shrink-0"></i>
+                            <div className="min-w-0">
+                                <p className="text-[10px] sm:text-sm text-stone-400 font-medium truncate">Plazo Yapeo</p>
+                                <p className="font-bold text-xs sm:text-base text-red-300 capitalize truncate">{formatDateShort(currentMatch.deadlineDate)}</p>
+                                <p className="text-[10px] sm:text-sm text-red-400 truncate">{formatTimeText(currentMatch.deadlineTime)}</p>
                             </div>
                         </div>
                     </div>
@@ -384,6 +466,7 @@
             const [showAddModal, setShowAddModal] = useState(false);
             const [searchTerm, setSearchTerm] = useState("");
             const [copyFeedback, setCopyFeedback] = useState(false);
+            const [isDownloading, setIsDownloading] = useState(false);
 
             if (!currentMatch) return null;
 
@@ -438,71 +521,80 @@
             };
 
             return (
-                <section className="bg-stone-800 rounded-2xl p-4 sm:p-6 shadow-xl border border-stone-700/50">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <section id="roster-capture-area" className="bg-stone-800 rounded-2xl p-3 sm:p-6 shadow-xl border border-stone-700/50 relative">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
                         <div>
-                            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                                <i className="ph-fill ph-users-three text-pitch-400"></i> Convocados Oficiales
+                            <h2 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
+                                <i className="ph-fill ph-users-three text-pitch-400"></i> Convocados
                             </h2>
-                            <p className="text-stone-400 text-xs sm:text-sm mt-1">
+                            <p className="text-stone-400 text-[10px] sm:text-sm mt-0.5">
                                 {convocadosList.length} Chocolateros {isAdmin && <span>• Recaudado: <span className="text-pitch-400 font-bold">S/ {totalCollected.toFixed(2)}</span></span>}
                             </p>
                         </div>
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                            <button onClick={handleCopyNumbers} className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800/80 text-blue-300 px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors border border-blue-900 text-sm">
-                                {copyFeedback ? <><i className="ph-fill ph-check"></i> Copiados!</> : <><i className="ph ph-copy"></i> Copiar N°s</>}
-                            </button>
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto" data-html2canvas-ignore="true">
+                            {isAdmin && (
+                                <button onClick={handleCopyNumbers} className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800/80 text-blue-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors border border-blue-900 text-[10px] sm:text-sm">
+                                    {copyFeedback ? <><i className="ph-fill ph-check"></i> Copiados</> : <><i className="ph ph-copy"></i> N°s</>}
+                                </button>
+                            )}
                             {isAdmin && !isCompleted && (
-                                <button onClick={() => setShowAddModal(true)} className="flex-1 sm:flex-none bg-stone-700 hover:bg-stone-600 text-white px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors border border-stone-600 text-sm">
+                                <button onClick={() => setShowAddModal(true)} className="flex-[2] sm:flex-none bg-stone-700 hover:bg-stone-600 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors border border-stone-600 text-[10px] sm:text-sm">
                                     <i className="ph ph-user-plus"></i> Armar Lista
                                 </button>
                             )}
                             {isAdmin && isCompleted && (
-                                <div className="flex-1 sm:flex-none bg-pitch-900/50 text-pitch-400 px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 border border-pitch-900 text-sm">
+                                <div className="flex-[2] sm:flex-none bg-pitch-900/50 text-pitch-400 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 border border-pitch-900 text-[10px] sm:text-sm text-center leading-tight">
                                     <i className="ph-fill ph-check-circle"></i> Partido Finalizado
                                 </div>
+                            )}
+                            {isAdmin && (
+                                <button onClick={() => captureAndDownload('roster-capture-area', `Convocados_${currentMatch.date}`, setIsDownloading)} className="flex-1 sm:flex-none bg-pitch-600 hover:bg-pitch-500 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-md text-[10px] sm:text-sm">
+                                    {isDownloading ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-download-simple"></i>} JPG
+                                </button>
                             )}
                         </div>
                     </div>
 
-                    <div className="grid gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-2 gap-2 sm:gap-3">
                         {convocadosList.map(player => {
                             const status = attendeesMap[player.id];
                             return (
-                                <div key={player.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-stone-900 p-3 rounded-xl border border-stone-700 gap-3">
-                                    <div className="flex items-center gap-3">
-                                        <PlayerAvatar player={player} className="w-10 h-10" />
-                                        <div>
-                                            <p className="font-semibold text-stone-100 text-sm sm:text-base">
+                                <div key={player.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-stone-900 p-2 sm:p-3 rounded-xl border border-stone-700 gap-2">
+                                    <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+                                        <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-semibold text-stone-100 text-[10px] sm:text-base truncate">
                                                 {formatPlayerName(player, isAdmin)}
                                             </p>
-                                            {isAdmin && player.phone && <p className="text-xs text-stone-500 font-mono"><i className="ph ph-whatsapp logo text-pitch-500"></i> {player.phone}</p>}
+                                            {isAdmin && player.phone && <p className="text-[8px] sm:text-xs text-stone-500 font-mono truncate" data-html2canvas-ignore="true"><i className="ph ph-whatsapp logo text-pitch-500"></i> {player.phone}</p>}
                                         </div>
                                     </div>
 
                                     {isAdmin && !isCompleted ? (
-                                        <select value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)} className="bg-stone-800 text-xs sm:text-sm border border-stone-600 rounded-lg p-2 focus:border-pitch-500 outline-none text-stone-200 w-full sm:w-auto">
-                                            <option className="bg-stone-900 text-white" value="full">✔️ Cupo Completo</option>
-                                            <option className="bg-stone-900 text-white" value="half">🌗 Medio Cupo</option>
-                                            <option className="bg-stone-900 text-white" value="free">🎁 Gratis / Invitado</option>
-                                            <option className="bg-stone-900 text-white" value="absent">❌ Faltó (Baja %)</option>
-                                            <option className="bg-stone-900 text-white" value="excused">🏥 Justificado (No baja %)</option>
-                                            <option className="bg-stone-900 text-red-400" value="none" className="text-red-400 font-semibold">🗑️ Quitar de la lista</option>
+                                        <select value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)} className="bg-stone-800 text-[8px] sm:text-sm border border-stone-600 rounded-md p-1 focus:border-pitch-500 outline-none text-stone-200 shrink-0 w-full sm:w-auto">
+                                            <option className="bg-stone-900 text-white" value="full">✔️ Completo</option>
+                                            <option className="bg-stone-900 text-white" value="half">🌗 Medio</option>
+                                            <option className="bg-stone-900 text-white" value="free">🎁 Gratis</option>
+                                            <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta pago</option>
+                                            <option className="bg-stone-900 text-white" value="absent">❌ Faltó</option>
+                                            <option className="bg-stone-900 text-white" value="excused">🏥 Justif.</option>
+                                            <option className="bg-stone-900 text-red-400 font-semibold" value="none">🗑️ Quitar</option>
                                         </select>
                                     ) : (
-                                        <div className="text-xs sm:text-sm font-medium self-start sm:self-auto">
-                                            {status === 'full' && <span className="text-pitch-400 bg-pitch-400/10 px-2 py-1 rounded border border-pitch-400/20 flex items-center gap-1"><i className="ph-fill ph-check-circle"></i> Va Completo</span>}
-                                            {status === 'half' && <span className="text-gold bg-gold/10 px-2 py-1 rounded border border-gold/20 flex items-center gap-1"><i className="ph-fill ph-star-half"></i> Medio Cupo</span>}
-                                            {status === 'free' && <span className="text-blue-400 bg-blue-400/10 px-2 py-1 rounded border border-blue-400/20 flex items-center gap-1"><i className="ph-fill ph-gift"></i> Invitado</span>}
-                                            {status === 'absent' && <span className="text-red-400 bg-red-400/10 px-2 py-1 rounded border border-red-400/20 flex items-center gap-1"><i className="ph-fill ph-x-circle"></i> Faltó</span>}
-                                            {status === 'excused' && <span className="text-stone-400 bg-stone-400/10 px-2 py-1 rounded border border-stone-400/20 flex items-center gap-1"><i className="ph-fill ph-first-aid"></i> Justificado</span>}
+                                        <div className="text-[8px] sm:text-sm font-medium shrink-0 w-full sm:w-auto flex justify-start sm:justify-end">
+                                            {status === 'full' && <span className="text-pitch-400 bg-pitch-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-pitch-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-check-circle"></i> <span className="hidden sm:inline">Va Completo</span><span className="sm:hidden">Full</span></span>}
+                                            {status === 'half' && <span className="text-gold bg-gold/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-gold/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-star-half"></i> <span className="hidden sm:inline">Medio Cupo</span><span className="sm:hidden">Mitad</span></span>}
+                                            {status === 'free' && <span className="text-blue-400 bg-blue-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-blue-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-gift"></i> <span className="hidden sm:inline">Invitado</span><span className="sm:hidden">Free</span></span>}
+                                            {status === 'pending_payment' && <span className="text-red-400 bg-red-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-red-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-warning-circle"></i> <span className="hidden sm:inline">Falta Adelantar</span><span className="sm:hidden">Debe</span></span>}
+                                            {status === 'absent' && <span className="text-red-400 bg-red-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-red-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-x-circle"></i> Faltó</span>}
+                                            {status === 'excused' && <span className="text-stone-400 bg-stone-400/10 px-1 py-0.5 sm:px-2 sm:py-1 rounded border border-stone-400/20 flex items-center gap-1 w-full sm:w-auto justify-center"><i className="ph-fill ph-first-aid"></i> <span className="hidden sm:inline">Justificado</span><span className="sm:hidden">Justif.</span></span>}
                                         </div>
                                     )}
                                 </div>
                             );
                         })}
                         {convocadosList.length === 0 && (
-                            <div className="text-center py-10 border-2 border-dashed border-stone-700 rounded-xl bg-stone-900/50">
+                            <div className="col-span-2 text-center py-10 border-2 border-dashed border-stone-700 rounded-xl bg-stone-900/50">
                                 <i className="ph ph-users-three text-4xl sm:text-5xl text-stone-600 mb-3 block"></i>
                                 <p className="text-stone-400 font-medium text-sm sm:text-lg">Aún no hay convocados en la lista oficial.</p>
                             </div>
@@ -623,7 +715,7 @@
                         <i className="ph-fill ph-trophy text-gold text-2xl sm:text-3xl"></i> Resumen del Partido
                     </h2>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-6 relative z-10">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 relative z-10">
                         {/* Marcador Central */}
                         <div className="bg-stone-900/80 border border-stone-700 p-3 sm:p-6 rounded-2xl flex flex-col items-center justify-center col-span-2 shadow-inner">
                             <p className="text-stone-400 text-[10px] sm:text-sm font-bold uppercase tracking-widest mb-2 sm:mb-4">Marcador Final</p>
@@ -644,25 +736,28 @@
                         </div>
 
                         {/* Top Scorer */}
-                        <div className="bg-gradient-to-t from-stone-900 to-stone-800 border border-stone-700 p-2 sm:p-6 rounded-2xl flex flex-col items-center justify-center col-span-1 shadow-inner relative">
-                            <p className="text-[10px] sm:text-xs font-black text-stone-400 uppercase tracking-widest mb-2 text-center leading-tight">Máx.<br/>Goleador</p>
+                        <div className="relative bg-stone-900/80 border border-stone-500 p-3 sm:p-4 flex flex-col items-center justify-start col-span-1 rounded-2xl shadow-inner mt-4 mb-4 sm:mt-6 sm:mb-6 min-h-[220px] sm:min-h-[240px]">
+                            <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-stone-400 text-stone-900 text-[9px] sm:text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md whitespace-nowrap z-10">
+                                MÁX. GOLEADOR
+                            </div>
+
                             {isTiedScorer ? (
                                 <>
                                     {isAdmin ? (
-                                        <div className="text-center w-full">
+                                        <div className="text-center w-full mt-2">
                                             <p className="text-[9px] sm:text-xs font-bold text-stone-300 mb-1 leading-tight">Empate {maxGoals} goles. Elige:</p>
                                             <div className="flex gap-1 flex-wrap justify-center mb-1">
                                                 {candidates.map(c => (
-                                                    <button key={c.player.id} onClick={() => updateCurrentMatch({...currentMatch, manualTopScorerId: c.player.id})} className="bg-stone-800 hover:bg-stone-700 border border-stone-600 rounded p-1 transition-colors">
-                                                        <PlayerAvatar player={c.player} className="w-5 h-5 sm:w-8 sm:h-8" />
+                                                    <button key={c.player.id} onClick={() => updateCurrentMatch({...currentMatch, manualTopScorerId: c.player.id})} className="bg-stone-800 hover:bg-stone-700 border border-stone-600 rounded p-1 transition-colors shadow-lg">
+                                                        <PlayerAvatar player={c.player} className="w-6 h-6 sm:w-8 sm:h-8" />
                                                     </button>
                                                 ))}
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="text-center text-stone-500 flex flex-col items-center">
-                                            <i className="ph-fill ph-scales text-2xl sm:text-4xl text-stone-600 mb-1"></i>
-                                            <p className="text-[9px] sm:text-sm font-bold text-stone-400 leading-tight">Empate<br/>en goles</p>
+                                        <div className="text-center text-stone-500 flex flex-col items-center mt-6">
+                                            <i className="ph-fill ph-scales text-3xl sm:text-5xl text-stone-600 mb-2"></i>
+                                            <p className="text-[10px] sm:text-sm font-bold leading-tight text-stone-400">Empate<br/>en goles</p>
                                         </div>
                                     )}
                                 </>
@@ -671,73 +766,84 @@
                                     {currentMatch.manualTopScorerId && isAdmin && candidates.length > 1 && (
                                         <button onClick={() => updateCurrentMatch({...currentMatch, manualTopScorerId: null})} className="absolute top-1 right-1 sm:top-2 sm:right-2 text-stone-500 hover:text-red-400"><i className="ph ph-arrow-counter-clockwise"></i></button>
                                     )}
-                                    <div className="flex flex-col items-center mt-2">
+                                    <div className="flex flex-col items-center mt-3 sm:mt-5 w-full flex-1">
                                         <div className="relative">
-                                            <PlayerAvatar player={topScorer.player} className="w-12 h-12 sm:w-16 sm:h-16 text-lg sm:text-2xl shadow-lg border-2 border-stone-500" />
-                                            <div className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-stone-900 rounded-full p-0.5 sm:p-1 border border-stone-700">
-                                                <i className="ph-fill ph-soccer-ball text-sm sm:text-xl text-pitch-400"></i>
+                                            <PlayerAvatar player={topScorer.player} className="w-16 h-16 sm:w-20 sm:h-20 text-xl sm:text-2xl shadow-xl border-2 border-stone-500" />
+                                            <div className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-stone-900 rounded-full p-1 border border-stone-600">
+                                                <i className="ph-fill ph-soccer-ball text-sm sm:text-xl text-stone-300"></i>
                                             </div>
                                         </div>
-                                        <p className="text-[10px] sm:text-sm font-bold text-white mt-3 text-center leading-tight px-1">{formatPlayerName(topScorer.player, true)}</p>
-                                        <p className="text-gold font-black text-xs sm:text-base mt-0.5">⚽ {topScorer.count} {topScorer.count === 1 ? 'Gol' : 'Goles'}</p>
-                                        {topScorer.team && <p className={`text-[9px] sm:text-xs font-bold mt-0.5 ${topScorer.team === 'A' ? 'text-blue-400' : 'text-red-400'}`}>Equipo {topScorer.team === 'A' ? 'Azul' : 'Rojo'}</p>}
+                                        <p className="text-white font-bold text-xs sm:text-base mt-3 text-center leading-tight truncate w-full px-1">{formatPlayerName(topScorer.player, true)}</p>
+                                        <p className="text-stone-300 font-black text-sm sm:text-lg mt-1 flex items-center gap-1 justify-center"><i className="ph-fill ph-soccer-ball"></i> {topScorer.count} {topScorer.count === 1 ? 'Gol' : 'Goles'}</p>
+                                        {topScorer.team && <p className={`text-[10px] sm:text-xs font-bold mt-1 uppercase tracking-wider ${topScorer.team === 'A' ? 'text-blue-400' : 'text-red-400'}`}>Equipo {topScorer.team === 'A' ? 'Azul' : 'Rojo'}</p>}
                                     </div>
                                 </>
                             ) : (
-                                <div className="text-center text-stone-500 flex flex-col items-center">
-                                    <i className="ph ph-mask-sad text-2xl sm:text-4xl mb-1"></i>
-                                    <p className="text-[9px] sm:text-sm font-medium leading-tight">Sin goles</p>
+                                <div className="text-center text-stone-500 flex flex-col items-center mt-6">
+                                    <i className="ph ph-mask-sad text-3xl sm:text-5xl mb-2"></i>
+                                    <p className="text-[10px] sm:text-sm font-bold leading-tight">Sin goles</p>
                                 </div>
                             )}
                         </div>
 
-                        {/* MVP (Estilo Dorado) */}
-                        <div className="bg-gradient-to-t from-amber-900/30 to-stone-900 border border-gold/40 p-2 sm:p-6 rounded-2xl flex flex-col items-center justify-start col-span-1 shadow-[0_0_15px_rgba(251,191,36,0.15)] relative pt-6 sm:pt-10">
+                        {/* MVP */}
+                        <div className="relative bg-gradient-to-t from-amber-900/20 to-stone-900/80 border border-gold/50 p-3 sm:p-4 flex flex-col items-center justify-start col-span-1 rounded-2xl shadow-[0_0_15px_rgba(251,191,36,0.15)] mt-4 mb-4 sm:mt-6 sm:mb-6 min-h-[220px] sm:min-h-[240px]">
+                            <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-gold text-stone-900 text-[9px] sm:text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-md whitespace-nowrap z-10 flex items-center gap-1">
+                                <i className="ph-fill ph-star"></i> MVP OFICIAL
+                            </div>
+
                             {isAdmin && (
-                                <div className="absolute top-1 right-1 sm:top-2 sm:right-2 flex overflow-hidden rounded border border-stone-600 text-[8px] sm:text-[10px] font-bold z-20">
+                                <div className="absolute top-1 right-1 sm:top-2 sm:right-2 flex overflow-hidden rounded border border-stone-700 text-[7px] sm:text-[9px] font-bold z-20 shadow-md">
                                     <button onClick={() => updateCurrentMatch({ ...currentMatch, mvpMode: 'manual' })} className={`px-1.5 py-0.5 sm:px-2 sm:py-1 transition-colors ${!isVoting ? 'bg-gold text-stone-900' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}>Manual</button>
                                     <button onClick={() => updateCurrentMatch({ ...currentMatch, mvpMode: 'voting' })} className={`px-1.5 py-0.5 sm:px-2 sm:py-1 transition-colors ${isVoting ? 'bg-gold text-stone-900' : 'bg-stone-800 text-stone-400 hover:bg-stone-700'}`}>Votos</button>
                                 </div>
                             )}
-                            <div className="absolute -top-2.5 sm:-top-3 bg-gold text-stone-900 text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-0.5 sm:py-1 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1">
-                                <i className="ph-fill ph-star"></i> MVP
-                            </div>
 
                             {/* MVP Display */}
                             {mvpPlayer ? (
-                                <div className="flex flex-col items-center mt-2 sm:mt-0 w-full">
-                                    <PlayerAvatar player={mvpPlayer} className="w-12 h-12 sm:w-16 sm:h-16 text-lg sm:text-2xl shadow-[0_0_15px_rgba(251,191,36,0.4)] border-2 border-gold" />
-                                    <p className="text-[10px] sm:text-sm font-bold text-white mt-3 text-center leading-tight px-1">{formatPlayerName(mvpPlayer, true)}</p>
-                                    {isVoting && <p className="text-gold font-black text-[9px] sm:text-xs mt-0.5">{Object.values(currentMatch.mvpVotes || {}).filter(v=>v===mvpPlayer.id).length} Votos</p>}
+                                <div className="flex flex-col items-center mt-4 sm:mt-6 w-full flex-1">
+                                    <div className="relative">
+                                        <PlayerAvatar player={mvpPlayer} className="w-16 h-16 sm:w-20 sm:h-20 text-xl sm:text-2xl shadow-xl border-2 border-gold" />
+                                        <div className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-stone-900 rounded-full p-1 border border-stone-600">
+                                            <i className="ph-fill ph-star text-sm sm:text-xl text-gold"></i>
+                                        </div>
+                                    </div>
+                                    <p className="text-white font-bold text-xs sm:text-base mt-3 text-center leading-tight truncate w-full px-1">{formatPlayerName(mvpPlayer, true)}</p>
+                                    <p className="text-gold font-black text-sm sm:text-lg mt-1 flex items-center gap-1 justify-center"><i className="ph-fill ph-medal text-gold"></i> Tier {mvpPlayer.tier || 'C'}</p>
+                                    {isVoting ? (
+                                        <p className="text-gold text-[10px] sm:text-xs font-bold mt-1 uppercase tracking-wider">{Object.values(currentMatch.mvpVotes || {}).filter(v=>v===mvpPlayer.id).length} {Object.values(currentMatch.mvpVotes || {}).filter(v=>v===mvpPlayer.id).length === 1 ? 'Voto' : 'Votos'}</p>
+                                    ) : (
+                                        <p className="text-gold text-[10px] sm:text-xs font-bold mt-1 uppercase tracking-wider">Destacado</p>
+                                    )}
                                 </div>
                             ) : tiedMvps.length > 0 ? (
-                                <div className="text-center text-stone-400 flex flex-col items-center">
-                                    <i className="ph-fill ph-users text-xl sm:text-3xl text-gold mb-1"></i>
-                                    <p className="text-[9px] sm:text-xs font-bold leading-tight text-gold">Empate de votos</p>
+                                <div className="text-center text-stone-400 flex flex-col items-center mt-6">
+                                    <i className="ph-fill ph-users text-3xl sm:text-5xl text-gold mb-2 drop-shadow-md"></i>
+                                    <p className="text-[10px] sm:text-xs font-black leading-tight text-gold">Empate de votos</p>
                                 </div>
                             ) : (
-                                <div className="text-center text-stone-500 flex flex-col items-center mt-1">
-                                    <i className="ph ph-user-circle-dashed text-2xl sm:text-4xl mb-1 text-gold/50"></i>
-                                    <p className="text-[9px] sm:text-sm font-medium leading-tight text-gold/70">Por definir</p>
+                                <div className="text-center text-stone-500 flex flex-col items-center mt-6">
+                                    <i className="ph ph-user-circle-dashed text-3xl sm:text-5xl mb-2 drop-shadow-sm"></i>
+                                    <p className="text-[10px] sm:text-sm font-bold leading-tight">Por definir</p>
                                 </div>
                             )}
 
                             {/* MVP Controls */}
-                            <div className="mt-auto pt-2 w-full">
+                            <div className="mt-auto pt-2 w-full relative z-30" data-html2canvas-ignore="true">
                                 {!isVoting && isAdmin && (
-                                    <select value={currentMatch.mvpId || ''} onChange={(e) => updateCurrentMatch({...currentMatch, mvpId: e.target.value})} className="w-full bg-stone-800 border border-stone-600 rounded p-1 text-white outline-none text-[9px] sm:text-xs text-center mt-1">
+                                    <select value={currentMatch.mvpId || ''} onChange={(e) => updateCurrentMatch({...currentMatch, mvpId: e.target.value})} className="w-full bg-stone-900 border border-gold/50 rounded p-1 text-gold outline-none text-[9px] sm:text-xs text-center font-bold shadow-lg">
                                         <option className="bg-stone-900 text-white" value="">Elegir MVP...</option>
                                         {attendees.map(p => <option className="bg-stone-900 text-white" key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
                                 )}
                                 {isVoting && loggedPlayerId && iAttended && (
-                                    <select value={myVote} onChange={(e) => updateCurrentMatch({...currentMatch, mvpVotes: {...(currentMatch.mvpVotes||{}), [loggedPlayerId]: e.target.value}})} className="w-full bg-amber-900/30 border border-gold/50 rounded p-1 text-gold outline-none text-[9px] sm:text-xs text-center mt-1 font-semibold">
+                                    <select value={myVote} onChange={(e) => updateCurrentMatch({...currentMatch, mvpVotes: {...(currentMatch.mvpVotes||{}), [loggedPlayerId]: e.target.value}})} className="w-full bg-amber-900/30 border border-gold/50 rounded p-1 text-gold outline-none text-[9px] sm:text-xs text-center font-bold shadow-lg">
                                         <option className="bg-stone-900 text-gold" value="">Tu Voto MVP...</option>
                                         {attendees.map(p => <option className="bg-stone-900 text-gold" key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
                                 )}
                                 {isVoting && (!loggedPlayerId || !iAttended) && (
-                                    <p className="text-[8px] sm:text-[10px] text-stone-500 text-center mt-1">Votación abierta a jugadores.</p>
+                                    <p className="text-[8px] sm:text-[9px] text-stone-500 font-bold text-center px-1">Votación abierta a jugadores.</p>
                                 )}
                             </div>
                         </div>
@@ -773,6 +879,8 @@
         }
 
         function MatchBoardSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin }) {
+            const [isDownloading, setIsDownloading] = useState(false);
+
             if (!currentMatch) return null;
 
             const isCompleted = currentMatch.status === 'completed';
@@ -802,36 +910,53 @@
                 updateCurrentMatch({ ...currentMatch, goals: newGoals });
             };
 
-            const handleRemoveGoal = (goalId) => {
+            const handleDecreaseGoal = (playerId, team) => {
                 if (isCompleted || !isAdmin) return;
-                const newGoals = goalsList.filter(g => g.id !== goalId);
+                const playerTeamGoals = goalsList.filter(g => g.playerId === playerId && g.team === team);
+                if (playerTeamGoals.length === 0) return;
+                const lastGoalId = playerTeamGoals[playerTeamGoals.length - 1].id;
+                const newGoals = goalsList.filter(g => g.id !== lastGoalId);
                 updateCurrentMatch({ ...currentMatch, goals: newGoals });
             };
 
             return (
-                <section className="bg-stone-800 rounded-2xl p-3 sm:p-6 shadow-xl border border-stone-700/50">
-                    <h2 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2 mb-4 sm:mb-6">
-                        <i className="ph-fill ph-chalkboard-teacher text-blue-400"></i> Pizarra {isCompleted && '(Final)'}
-                    </h2>
+                <section id="board-capture-area" className="bg-stone-800 rounded-2xl p-2 sm:p-6 shadow-xl border border-stone-700/50">
+                    <div className="flex justify-between items-center mb-3 sm:mb-6 px-1 sm:px-0">
+                        <h2 className="text-base sm:text-2xl font-bold text-white flex items-center gap-1.5 sm:gap-2">
+                            <i className="ph-fill ph-chalkboard-teacher text-blue-400"></i> Pizarra {isCompleted && '(Final)'}
+                        </h2>
+                        {isAdmin && (
+                            <button data-html2canvas-ignore="true" onClick={() => captureAndDownload('board-capture-area', `Pizarra_${currentMatch.date}`, setIsDownloading)} className="bg-pitch-600 hover:bg-pitch-500 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg font-semibold flex items-center gap-1.5 transition-colors shadow-md text-[10px] sm:text-sm">
+                                {isDownloading ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-download-simple"></i>} JPG
+                            </button>
+                        )}
+                    </div>
 
-                    <div className="grid grid-cols-2 gap-2 sm:gap-6">
-                        <div className="bg-stone-900 border border-blue-900/50 rounded-xl p-2 sm:p-4">
-                            <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start mb-2 sm:mb-4 gap-1">
-                                <h3 className="font-bold text-blue-400 text-[10px] sm:text-lg text-center">Azul (A)</h3>
-                                <span className="text-xl sm:text-2xl font-black text-white">{scoreA}</span>
+                    <div className="grid grid-cols-2 gap-1.5 sm:gap-6">
+                        <div className="bg-stone-900 border border-blue-900/50 rounded-xl p-1.5 sm:p-4">
+                            <div className="flex justify-between items-center mb-1.5 sm:mb-4 gap-1">
+                                <h3 className="font-bold text-blue-400 text-[10px] sm:text-lg">Azul (A)</h3>
+                                <span className="text-lg sm:text-2xl font-black text-white bg-blue-900/30 px-2 py-0.5 rounded-md">{scoreA}</span>
                             </div>
-                            <div className="space-y-1 sm:space-y-2 min-h-[80px] sm:min-h-[100px]">
+                            <div className="space-y-1 sm:space-y-2 min-h-[60px] sm:min-h-[100px]">
                                 {teamA.map(p => {
                                     const pGoals = goalsList.filter(g => g.playerId === p.id && g.team === 'A');
                                     return (
-                                        <div key={p.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-stone-800 p-1.5 sm:p-2 rounded gap-1 sm:gap-0">
-                                            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                                                <span className="text-stone-300 text-[10px] sm:text-sm truncate max-w-[80px] sm:max-w-none">{p.name} {p.lastName?.charAt(0)}.</span>
-                                                {pGoals.length > 0 && <span className="text-[9px] sm:text-xs text-pitch-400 font-bold">⚽x{pGoals.length}</span>}
+                                        <div key={p.id} className="flex justify-between items-center bg-stone-800 p-1 sm:p-2 rounded border border-stone-700/30">
+                                            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                                                <span className="text-stone-300 text-[9px] sm:text-sm truncate">{p.name} {p.lastName?.charAt(0)}.</span>
+                                                {pGoals.length > 0 && <span className="text-[8px] sm:text-xs text-pitch-400 font-bold shrink-0">⚽x{pGoals.length}</span>}
                                             </div>
-                                            <div className="flex gap-1 w-full sm:w-auto justify-end">
-                                                {isAdmin && !isCompleted && <button onClick={() => handleAddGoal(p.id, 'A')} className="text-pitch-400 bg-pitch-900/30 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[9px] sm:text-xs">+ Gol</button>}
-                                                {isAdmin && !isCompleted && <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 px-1 sm:px-2"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>}
+                                            <div className="flex gap-0.5 sm:gap-1 shrink-0" data-html2canvas-ignore="true">
+                                                {isAdmin && !isCompleted && pGoals.length > 0 && (
+                                                    <button onClick={() => handleDecreaseGoal(p.id, 'A')} className="text-red-400 hover:text-red-300 bg-red-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Quitar un gol">-</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAddGoal(p.id, 'A')} className="text-pitch-400 hover:text-pitch-300 bg-pitch-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Añadir un gol">+</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center ml-0.5" title="Quitar del equipo"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>
+                                                )}
                                             </div>
                                         </div>
                                     )
@@ -839,23 +964,30 @@
                             </div>
                         </div>
 
-                        <div className="bg-stone-900 border border-red-900/50 rounded-xl p-2 sm:p-4">
-                            <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start mb-2 sm:mb-4 gap-1">
-                                <h3 className="font-bold text-red-400 text-[10px] sm:text-lg text-center">Rojo (B)</h3>
-                                <span className="text-xl sm:text-2xl font-black text-white">{scoreB}</span>
+                        <div className="bg-stone-900 border border-red-900/50 rounded-xl p-1.5 sm:p-4">
+                            <div className="flex justify-between items-center mb-1.5 sm:mb-4 gap-1">
+                                <h3 className="font-bold text-red-400 text-[10px] sm:text-lg">Rojo (B)</h3>
+                                <span className="text-lg sm:text-2xl font-black text-white bg-red-900/30 px-2 py-0.5 rounded-md">{scoreB}</span>
                             </div>
-                            <div className="space-y-1 sm:space-y-2 min-h-[80px] sm:min-h-[100px]">
+                            <div className="space-y-1 sm:space-y-2 min-h-[60px] sm:min-h-[100px]">
                                 {teamB.map(p => {
                                     const pGoals = goalsList.filter(g => g.playerId === p.id && g.team === 'B');
                                     return (
-                                        <div key={p.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-stone-800 p-1.5 sm:p-2 rounded gap-1 sm:gap-0">
-                                            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                                                <span className="text-stone-300 text-[10px] sm:text-sm truncate max-w-[80px] sm:max-w-none">{p.name} {p.lastName?.charAt(0)}.</span>
-                                                {pGoals.length > 0 && <span className="text-[9px] sm:text-xs text-pitch-400 font-bold">⚽x{pGoals.length}</span>}
+                                        <div key={p.id} className="flex justify-between items-center bg-stone-800 p-1 sm:p-2 rounded border border-stone-700/30">
+                                            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                                                <span className="text-stone-300 text-[9px] sm:text-sm truncate">{p.name} {p.lastName?.charAt(0)}.</span>
+                                                {pGoals.length > 0 && <span className="text-[8px] sm:text-xs text-pitch-400 font-bold shrink-0">⚽x{pGoals.length}</span>}
                                             </div>
-                                            <div className="flex gap-1 w-full sm:w-auto justify-end">
-                                                {isAdmin && !isCompleted && <button onClick={() => handleAddGoal(p.id, 'B')} className="text-pitch-400 bg-pitch-900/30 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[9px] sm:text-xs">+ Gol</button>}
-                                                {isAdmin && !isCompleted && <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 px-1 sm:px-2"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>}
+                                            <div className="flex gap-0.5 sm:gap-1 shrink-0" data-html2canvas-ignore="true">
+                                                {isAdmin && !isCompleted && pGoals.length > 0 && (
+                                                    <button onClick={() => handleDecreaseGoal(p.id, 'B')} className="text-red-400 hover:text-red-300 bg-red-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Quitar un gol">-</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAddGoal(p.id, 'B')} className="text-pitch-400 hover:text-pitch-300 bg-pitch-900/30 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold text-[10px] sm:text-xs" title="Añadir un gol">+</button>
+                                                )}
+                                                {isAdmin && !isCompleted && (
+                                                    <button onClick={() => handleAssignTeam(p.id, null)} className="text-stone-500 hover:text-stone-300 w-4 h-4 sm:w-6 sm:h-6 rounded flex items-center justify-center ml-0.5" title="Quitar del equipo"><i className="ph ph-x text-[10px] sm:text-sm"></i></button>
+                                                )}
                                             </div>
                                         </div>
                                     )
@@ -865,14 +997,14 @@
                     </div>
 
                     {!isCompleted && unassigned.length > 0 && (
-                        <div className="mt-6 pt-4 border-t border-stone-700">
-                            <h4 className="text-stone-400 font-medium mb-3 text-sm">Jugadores sin equipo:</h4>
-                            <div className="flex flex-wrap gap-2">
+                        <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-stone-700 px-1 sm:px-0">
+                            <h4 className="text-stone-400 font-medium mb-2 text-xs sm:text-sm">Sin equipo:</h4>
+                            <div className="flex flex-wrap gap-1 sm:gap-2">
                                 {unassigned.map(p => (
-                                    <div key={p.id} className="bg-stone-900 border border-stone-700 px-3 py-1.5 rounded-full flex items-center gap-2 text-sm">
+                                    <div key={p.id} className="bg-stone-900 border border-stone-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full flex items-center gap-1 sm:gap-2 text-[10px] sm:text-sm">
                                         <span className="text-stone-300">{p.name} {p.lastName?.charAt(0)}.</span>
                                         {isAdmin && (
-                                            <div className="flex gap-1 border-l border-stone-700 pl-2">
+                                            <div className="flex gap-0.5 sm:gap-1 border-l border-stone-700 pl-1 sm:pl-2" data-html2canvas-ignore="true">
                                                 <button onClick={() => handleAssignTeam(p.id, 'A')} className="text-blue-400 font-bold px-1 hover:bg-blue-900/30 rounded">A</button>
                                                 <button onClick={() => handleAssignTeam(p.id, 'B')} className="text-red-400 font-bold px-1 hover:bg-red-900/30 rounded">B</button>
                                             </div>
@@ -938,14 +1070,14 @@
                     <div className="w-full overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="border-b border-stone-700 text-stone-400 text-[9px] sm:text-sm uppercase tracking-wide">
+                                <tr className="border-b border-stone-700 text-stone-400 text-[8px] sm:text-sm uppercase tracking-wide">
                                     <th className="p-1 sm:p-3 font-semibold w-6 sm:w-12 text-center">#</th>
                                     <th className="p-1 sm:p-3 font-semibold">Chocolatero</th>
                                     <th className="p-1 sm:p-3 font-semibold text-center w-8 sm:w-auto">Pos</th>
                                     <th className="p-1 sm:p-3 font-semibold text-center w-10 sm:w-auto">Tier</th>
                                     <th className="p-1 sm:p-3 font-semibold text-center w-8 sm:w-auto" title="Goles Totales">Gol</th>
                                     <th className="p-1 sm:p-3 font-semibold text-center w-10 sm:w-auto" title="% de Partidos Ganados">Win%</th>
-                                    <th className="p-1 sm:p-3 font-semibold text-right w-10 sm:w-auto">% ASIS</th>
+                                    <th className="p-1 sm:p-3 font-semibold text-right w-10 sm:w-auto whitespace-nowrap">% ASIS</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1355,10 +1487,15 @@
                     const attendancePerc = computedMatches > 0 ? (points / computedMatches) * 100 : 0;
                     const winPerc = teamMatches > 0 ? (wins / teamMatches) * 100 : 0;
 
-                    return { ...p, computedMatches, points, totalGoals: goals, wins, teamMatches, attendancePerc, winPerc };
+                    let tier = 'C', tierColor = 'text-stone-400', tierBg = 'bg-stone-400/10 border-stone-400/20';
+                    if (attendancePerc >= 75) { tier = 'S'; tierColor = 'text-pitch-400'; tierBg = 'bg-pitch-400/10 border-pitch-400/20'; }
+                    else if (attendancePerc >= 50) { tier = 'A'; tierColor = 'text-blue-400'; tierBg = 'bg-blue-400/10 border-blue-400/20'; }
+                    else if (attendancePerc >= 25) { tier = 'B'; tierColor = 'text-gold'; tierBg = 'bg-gold/10 border-gold/20'; }
+                    else { tier = 'C'; tierColor = 'text-red-400'; tierBg = 'bg-red-400/10 border-red-400/20'; }
+
+                    return { ...p, computedMatches, points, totalGoals: goals, wins, teamMatches, attendancePerc, winPerc, tier, tierColor, tierBg };
                 });
             }, [dbState.players, dbState.matches]);
-
 
             const handleLogin = () => {
                 const adminCreds = dbState.adminCredentials || { username: 'admin', password: '1234' };
