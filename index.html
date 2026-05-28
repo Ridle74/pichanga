@@ -73,6 +73,38 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #292524; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #57534e; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #78716c; }
+
+        /* ── Solo para captura JPG del roster: mejor espaciado y centrado ── */
+        #roster-capture-area.jpg-capturing .player-card {
+            display: flex !important;
+            align-items: center !important;
+            flex-direction: row !important;
+            min-height: 52px !important;
+        }
+        #roster-capture-area.jpg-capturing .player-card .player-name {
+            align-self: center !important;
+            line-height: 1 !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+        #roster-capture-area.jpg-capturing .badge-wrap {
+            display: flex !important;
+            align-items: center !important;
+            align-self: center !important;
+            margin-top: 0 !important;
+            gap: 4px !important;
+        }
+        #roster-capture-area.jpg-capturing .badge-status,
+        #roster-capture-area.jpg-capturing .badge-pos {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            align-self: center !important;
+            line-height: 1 !important;
+            padding: 6px 10px !important;
+            font-size: 11px !important;
+            border-radius: 5px !important;
+        }
     </style>
 </head>
 <body>
@@ -136,12 +168,13 @@
         };
 
         // --- UTILS ---
-        const captureAndDownload = async (elementId, fileName, setDownloading) => {
+        const captureAndDownload = async (elementId, fileName, setDownloading, captureClass = null) => {
             if (!window.html2canvas) return;
             setDownloading(true);
-            await new Promise(r => setTimeout(r, 100));
+            const element = document.getElementById(elementId);
+            if (captureClass) element.classList.add(captureClass);
+            await new Promise(r => setTimeout(r, 120));
             try {
-                const element = document.getElementById(elementId);
                 const canvas = await window.html2canvas(element, {
                     scale: 3,
                     useCORS: true,
@@ -154,6 +187,7 @@
             } catch (err) {
                 console.error("Error al exportar la imagen", err);
             }
+            if (captureClass) element.classList.remove(captureClass);
             setDownloading(false);
         };
 
@@ -201,49 +235,95 @@
             );
         }
 
-        function PlayerAvatar({ player, className = "w-10 h-10 text-sm" }) {
+        function PlayerAvatar({ player, className = "w-10 h-10 text-sm", style = {} }) {
             const [imgError, setImgError] = useState(false);
             const hasImage = player.photoUrl && !imgError;
             if (hasImage) {
-                return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)} className={`${className} rounded-full object-cover object-center border border-pitch-500 shadow-inner bg-stone-900 shrink-0`} />;
+                return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)}
+                    className={`${className} rounded-full object-cover object-center border border-pitch-500 shadow-inner bg-stone-900 shrink-0`}
+                    style={{ flexShrink:0, alignSelf:'center', ...style }} />;
             }
             return (
-                <div className={`${className} shrink-0 rounded-full bg-gradient-to-br from-pitch-600 to-pitch-800 border border-pitch-500 flex items-center justify-center text-white font-bold uppercase shadow-inner`}>
+                <div
+                    className={`${className} shrink-0 rounded-full bg-gradient-to-br from-pitch-600 to-pitch-800 border border-pitch-500 shadow-inner`}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', textTransform:'uppercase', lineHeight:'1', textAlign:'center', flexShrink:0, alignSelf:'center', ...style }}
+                >
                     {player.name?.charAt(0)}{player.lastName ? player.lastName.charAt(0) : ''}
                 </div>
             );
         }
 
         function ImageCropperModal({ file, onCropped, onCancel }) {
+            const SIZE = 256;
             const [src, setSrc] = useState(null);
             const canvasRef = useRef(null);
             const imgRef = useRef(null);
             const [scale, setScale] = useState(1);
+            const [minScale, setMinScale] = useState(0.05);
             const [pos, setPos] = useState({ x: 0, y: 0 });
+            const [imgNatural, setImgNatural] = useState({ w: 1, h: 1 });
             const [isDragging, setIsDragging] = useState(false);
             const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+            const containerRef = useRef(null);
 
+            // Clamp position: la imagen nunca deja áreas negras dentro del círculo
+            const clamp = (x, y, s, nw, nh) => ({
+                x: Math.max(SIZE - nw * s, Math.min(0, x)),
+                y: Math.max(SIZE - nh * s, Math.min(0, y)),
+            });
+
+            const loadFile = (f) => {
+                if (!f) return;
+                const reader = new FileReader();
+                reader.onload = e => setSrc(e.target.result);
+                reader.readAsDataURL(f);
+            };
+
+            useEffect(() => { loadFile(file); }, [file]);
+
+            // Escuchar pegado de imagen (Ctrl+V) mientras el modal está abierto
             useEffect(() => {
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = e => setSrc(e.target.result);
-                    reader.readAsDataURL(file);
-                }
-            }, [file]);
+                const handlePaste = (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of items) {
+                        if (item.type.startsWith('image/')) {
+                            const f = item.getAsFile();
+                            if (f) { loadFile(f); e.preventDefault(); }
+                            break;
+                        }
+                    }
+                };
+                document.addEventListener('paste', handlePaste);
+                return () => document.removeEventListener('paste', handlePaste);
+            }, []);
 
             const onImageLoad = (e) => {
-                const { naturalWidth, naturalHeight } = e.target;
-                const initialScale = Math.max(256 / naturalWidth, 256 / naturalHeight);
-                setScale(initialScale);
-                setPos({ x: (256 - naturalWidth * initialScale) / 2, y: (256 - naturalHeight * initialScale) / 2 });
+                const { naturalWidth: nw, naturalHeight: nh } = e.target;
+                setImgNatural({ w: nw, h: nh });
+                const ms = Math.max(SIZE / nw, SIZE / nh);
+                setMinScale(ms);
+                setScale(ms);
+                setPos(clamp((SIZE - nw * ms) / 2, (SIZE - nh * ms) / 2, ms, nw, nh));
+            };
+
+            const getRelPos = (clientX, clientY) => {
+                const rect = containerRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            };
+
+            const handleScaleChange = (newScale) => {
+                const s = Math.max(minScale, newScale);
+                setScale(s);
+                setPos(prev => clamp(prev.x, prev.y, s, imgNatural.w, imgNatural.h));
             };
 
             const handleCrop = () => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
                 const img = imgRef.current;
-                canvas.width = 256; canvas.height = 256;
-                ctx.clearRect(0, 0, 256, 256);
+                canvas.width = SIZE; canvas.height = SIZE;
+                ctx.clearRect(0, 0, SIZE, SIZE);
                 ctx.drawImage(img, pos.x, pos.y, img.naturalWidth * scale, img.naturalHeight * scale);
                 onCropped(canvas.toDataURL('image/jpeg', 0.9));
             };
@@ -252,32 +332,43 @@
 
             return (
                 <Modal isOpen={true} onClose={onCancel} title="Recortar Imagen">
-                    <div className="flex flex-col items-center space-y-6 overflow-hidden">
-                        <p className="text-stone-400 text-sm text-center">Arrastra la imagen y ajusta el zoom para centrar tu rostro en la cuadrícula.</p>
+                    <div className="flex flex-col items-center space-y-4 overflow-hidden">
+                        <p className="text-stone-400 text-sm text-center">Arrastra la imagen y ajusta el zoom. El círculo muestra el recorte exacto.</p>
+
                         <div
+                            ref={containerRef}
                             className="relative bg-stone-900 border-2 border-dashed border-stone-500 rounded-full overflow-hidden cursor-move touch-none shadow-inner"
-                            style={{ width: '256px', height: '256px', boxSizing: 'content-box' }}
-                            onMouseDown={e => { setIsDragging(true); setStartPos({ x: e.clientX - pos.x, y: e.clientY - pos.y }); }}
-                            onMouseMove={e => { if (isDragging) setPos({ x: e.clientX - startPos.x, y: e.clientY - startPos.y }); }}
+                            style={{ width: `${SIZE}px`, height: `${SIZE}px`, boxSizing: 'content-box', flexShrink: 0 }}
+                            onMouseDown={e => { setIsDragging(true); const r = getRelPos(e.clientX, e.clientY); setStartPos({ x: r.x - pos.x, y: r.y - pos.y }); }}
+                            onMouseMove={e => { if (!isDragging) return; const r = getRelPos(e.clientX, e.clientY); setPos(clamp(r.x - startPos.x, r.y - startPos.y, scale, imgNatural.w, imgNatural.h)); }}
                             onMouseUp={() => setIsDragging(false)}
                             onMouseLeave={() => setIsDragging(false)}
-                            onTouchStart={e => { setIsDragging(true); setStartPos({ x: e.touches[0].clientX - pos.x, y: e.touches[0].clientY - pos.y }); }}
-                            onTouchMove={e => { if (isDragging) setPos({ x: e.touches[0].clientX - startPos.x, y: e.touches[0].clientY - startPos.y }); }}
+                            onTouchStart={e => { setIsDragging(true); const r = getRelPos(e.touches[0].clientX, e.touches[0].clientY); setStartPos({ x: r.x - pos.x, y: r.y - pos.y }); }}
+                            onTouchMove={e => { if (!isDragging) return; const r = getRelPos(e.touches[0].clientX, e.touches[0].clientY); setPos(clamp(r.x - startPos.x, r.y - startPos.y, scale, imgNatural.w, imgNatural.h)); }}
                             onTouchEnd={() => setIsDragging(false)}
                         >
                             <img ref={imgRef} src={src} onLoad={onImageLoad} alt="Crop preview"
                                 style={{ transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none', maxWidth: 'none' }} />
-                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
-                                <div className="w-full h-[1px] bg-white/40"></div>
-                                <div className="h-full w-[1px] bg-white/40 absolute"></div>
-                                <div className="w-3/4 h-3/4 border-2 border-white/30 rounded-full absolute"></div>
+
+                            {/* Guías de centrado y borde circular */}
+                            <div className="absolute inset-0 pointer-events-none z-10">
+                                {/* Línea horizontal */}
+                                <div style={{ position:'absolute', width:'100%', height:'1px', background:'rgba(255,255,255,0.45)', top:'50%' }}></div>
+                                {/* Línea vertical */}
+                                <div style={{ position:'absolute', height:'100%', width:'1px', background:'rgba(255,255,255,0.45)', left:'50%' }}></div>
+                                {/* Punto central */}
+                                <div style={{ position:'absolute', width:'6px', height:'6px', background:'rgba(255,255,255,0.7)', borderRadius:'50%', top:'calc(50% - 3px)', left:'calc(50% - 3px)' }}></div>
+                                {/* Borde circular = límite exacto del recorte */}
+                                <div style={{ position:'absolute', inset:0, border:'2px solid rgba(255,255,255,0.55)', borderRadius:'50%' }}></div>
                             </div>
                         </div>
+
                         <div className="w-full flex items-center gap-3">
                             <i className="ph-fill ph-image text-stone-500 text-xl"></i>
-                            <input type="range" min="0.05" max="3" step="0.01" value={scale} onChange={e => setScale(parseFloat(e.target.value))} className="w-full accent-pitch-500" />
+                            <input type="range" min={minScale} max="3" step="0.01" value={scale} onChange={e => handleScaleChange(parseFloat(e.target.value))} className="w-full accent-pitch-500" />
                             <i className="ph-fill ph-magnifying-glass-plus text-stone-500 text-xl"></i>
                         </div>
+                        <p className="text-stone-500 text-xs text-center">💡 También puedes pegar una imagen con <kbd className="bg-stone-700 text-stone-300 px-1.5 py-0.5 rounded text-[10px] font-mono">Ctrl+V</kbd></p>
                         <div className="flex gap-2 w-full pt-2 border-t border-stone-700">
                             <button onClick={onCancel} className="flex-1 bg-stone-700 hover:bg-stone-600 py-3 rounded-lg text-white font-semibold transition-colors">Cancelar</button>
                             <button onClick={handleCrop} className="flex-1 bg-pitch-600 hover:bg-pitch-500 py-3 rounded-lg text-white font-bold transition-colors">Aplicar Recorte</button>
@@ -554,7 +645,7 @@
                                 </div>
                             )}
                             {isAdmin && (
-                                <button onClick={() => captureAndDownload('roster-capture-area', `Convocados_${currentMatch.date}`, setIsDownloading)} className="flex-1 sm:flex-none bg-pitch-600 hover:bg-pitch-500 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-md text-[10px] sm:text-sm">
+                                <button onClick={() => captureAndDownload('roster-capture-area', `Convocados_${currentMatch.date}`, setIsDownloading, 'jpg-capturing')} className="flex-1 sm:flex-none bg-pitch-600 hover:bg-pitch-500 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-md text-[10px] sm:text-sm">
                                     {isDownloading ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-download-simple"></i>} JPG
                                 </button>
                             )}
@@ -572,36 +663,57 @@
                         };
                         const canEdit = isAdmin && !isCompleted;
                         return (
-                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div className={`grid gap-2 sm:gap-3 ${canEdit ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2'}`}>
                         {convocadosList.map(player => {
                             const status = attendeesMap[player.id];
                             const bd = BADGE[status];
                             return (
-                                <div key={player.id} className="flex items-start gap-2 sm:gap-3 bg-stone-900 p-2 sm:p-3 rounded-xl border border-stone-700">
-                                    <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0 mt-0.5" />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-semibold text-stone-100 text-[10px] sm:text-base leading-tight break-words">{formatPlayerName(player, isAdmin)}</p>
-                                        {/* Edición: solo select (sin badge redundante) */}
-                                        {canEdit ? (
-                                            <select data-html2canvas-ignore="true" value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)}
-                                                className={`mt-1 w-full text-[7px] sm:text-sm border rounded-md px-1 py-0.5 focus:border-pitch-500 outline-none shrink-0 font-semibold ${bd ? `${bd.c} ${bd.bg} border-stone-600` : 'text-stone-300 bg-stone-800 border-stone-600'}`}>
-                                                <option className="bg-stone-900 text-white" value="full">✔️ Adelanto Confirmado</option>
-                                                <option className="bg-stone-900 text-white" value="half">🌗 Medio Cupo</option>
-                                                <option className="bg-stone-900 text-white" value="free">🎁 Invitado</option>
-                                                <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta Adelanto</option>
-                                                <option className="bg-stone-900 text-white" value="absent">❌ Faltó</option>
-                                                <option className="bg-stone-900 text-white" value="excused">🏥 Justificado</option>
-                                                <option className="bg-stone-900 text-red-400" value="none">🗑️ Quitar</option>
-                                            </select>
-                                        ) : (
-                                            /* Vista pública: solo badge */
-                                            bd && (
-                                                <div className={`mt-1 inline-flex items-center gap-0.5 ${bd.c} ${bd.bg} border ${bd.b} px-1 py-0.5 rounded text-[6px] sm:text-[10px] font-semibold whitespace-nowrap`}>
-                                                    <i className={bd.i}></i> {bd.label}
-                                                </div>
-                                            )
+                                <div key={player.id}
+                                    className="player-card flex items-center gap-2 sm:gap-3 bg-stone-900 px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl border border-stone-700 min-w-0"
+                                    style={{ display:'flex', alignItems:'center', flexDirection:'row' }}>
+                                    {/* 1. Avatar */}
+                                    <PlayerAvatar player={player} className="w-8 h-8 sm:w-9 sm:h-9 text-xs shrink-0"
+                                        style={{ flexShrink:0, alignSelf:'center' }} />
+
+                                    {/* 2. Nombre */}
+                                    <p className="player-name font-semibold text-stone-100 text-[10px] sm:text-sm leading-tight truncate"
+                                        style={{ flex:'1 1 0', minWidth:0, alignSelf:'center', lineHeight:'1', overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>
+                                        {player.name}{player.lastName ? ` ${player.lastName}` : ''}
+                                    </p>
+
+                                    {/* 3+4. Badge de estado + posición (visibles en JPG) */}
+                                    <div className="badge-wrap flex items-center gap-1 shrink-0"
+                                        style={{ display:'flex', alignItems:'center', alignSelf:'center', flexShrink:0, gap:'4px' }}>
+                                        {bd && (
+                                            <div className={`badge-status inline-flex items-center gap-0.5 ${bd.c} ${bd.bg} border ${bd.b} px-1 py-0.5 rounded text-[8px] sm:text-[10px] font-semibold whitespace-nowrap`}
+                                                style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', lineHeight:'1', whiteSpace:'nowrap' }}>
+                                                <i className={bd.i}></i>
+                                                <span className="hidden sm:inline">{bd.label}</span>
+                                                <span className="sm:hidden">{bd.label.replace('Adelanto ','').replace(' Adelanto','')}</span>
+                                            </div>
+                                        )}
+                                        {player.position && (
+                                            <span className="badge-pos inline-flex items-center justify-center text-[8px] sm:text-[9px] font-bold text-stone-300 bg-stone-700 border border-stone-600 px-1 py-0.5 rounded whitespace-nowrap"
+                                                style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', lineHeight:'1', whiteSpace:'nowrap' }}>
+                                                {player.position}
+                                            </span>
                                         )}
                                     </div>
+
+                                    {/* 5. Select de edición (oculto en JPG) */}
+                                    {canEdit && (
+                                        <select data-html2canvas-ignore="true" value={status}
+                                            onChange={(e) => handleStatusChange(player.id, e.target.value)}
+                                            className="shrink-0 bg-stone-800 text-[8px] sm:text-xs border border-stone-600 rounded-md px-1 py-0.5 focus:border-pitch-500 outline-none text-stone-200 font-semibold max-w-[90px] sm:max-w-[145px]">
+                                            <option className="bg-stone-900 text-white" value="full">✔️ Confirmado</option>
+                                            <option className="bg-stone-900 text-white" value="half">🌗 Medio Cupo</option>
+                                            <option className="bg-stone-900 text-white" value="free">🎁 Invitado</option>
+                                            <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta Adelanto</option>
+                                            <option className="bg-stone-900 text-white" value="absent">❌ Faltó</option>
+                                            <option className="bg-stone-900 text-white" value="excused">🏥 Justificado</option>
+                                            <option className="bg-stone-900 text-red-400" value="none">🗑️ Quitar</option>
+                                        </select>
+                                    )}
                                 </div>
                             );
                         })}
@@ -871,6 +983,7 @@
         // --- BOARD SECTION ---
         function MatchBoardSection({ currentMatch, updateCurrentMatch, computedPlayers, isAdmin }) {
             const [isDownloading, setIsDownloading] = useState(false);
+            const [autoConfirm, setAutoConfirm] = useState(false);
             if (!currentMatch) return null;
 
             const isCompleted = currentMatch.status === 'completed';
@@ -885,6 +998,78 @@
 
             const scoreA = goalsList.filter(g => g.team === 'A').length;
             const scoreB = goalsList.filter(g => g.team === 'B').length;
+
+            // ── Auto-asignación equitativa ──────────────────────────────
+            const autoAssignTeams = () => {
+                if (isCompleted || convocadosList.length === 0) return;
+
+                // 1. Calcular fuerza de cada jugador (0-100)
+                const POS_ORDER = { ARQ: 0, DEF: 1, MED: 2, DEL: 3, '': 4 };
+
+                const scored = convocadosList.map(p => {
+                    const hasStats = p.winPerc > 0 || p.totalGoals > 0;
+                    const winScore   = p.winPerc       || 0;                  // 0-100
+                    const goalScore  = Math.min((p.totalGoals || 0) * 4, 60); // max 60
+                    const atndScore  = p.attendancePerc || 0;                  // 0-100
+                    const strength   = hasStats
+                        ? winScore * 0.5 + goalScore * 0.3 + atndScore * 0.2
+                        : 0;
+                    return { ...p, strength, pos: POS_ORDER[p.position] ?? 4 };
+                });
+
+                // 2. Separar ARQs y el resto
+                const arqs  = scored.filter(p => p.position === 'ARQ').sort((a,b) => b.strength - a.strength);
+                const rest  = scored.filter(p => p.position !== 'ARQ').sort((a,b) => b.strength - a.strength);
+
+                const newTeams = {};
+
+                // 3. Asignar ARQs: el mejor a A, siguiente a B, etc.
+                arqs.forEach((p, i) => { newTeams[p.id] = i % 2 === 0 ? 'A' : 'B'; });
+
+                // 4. Snake-draft para el resto: A B B A A B B A ...
+                //    (garantiza que la suma de fuerza de ambos equipos sea similar)
+                rest.forEach((p, i) => {
+                    const round      = Math.floor(i / 2);
+                    const posInRound = i % 2;
+                    const team = (round % 2 === 0)
+                        ? (posInRound === 0 ? 'A' : 'B')
+                        : (posInRound === 0 ? 'B' : 'A');
+                    newTeams[p.id] = team;
+                });
+
+                // 5. Balance de posiciones: si un equipo acumula todos los DEL,
+                //    intercambiar el DEL más débil del equipo sobrado por el jugador
+                //    más cercano en fuerza del otro equipo.
+                const POS_TYPES = ['DEF', 'MED', 'DEL'];
+                POS_TYPES.forEach(pos => {
+                    const inA = rest.filter(p => p.position === pos && newTeams[p.id] === 'A');
+                    const inB = rest.filter(p => p.position === pos && newTeams[p.id] === 'B');
+                    if (inA.length - inB.length >= 2) {
+                        // A tiene al menos 2 más de este pos → mover el más débil de A a B y swap
+                        const weakA = inA[inA.length - 1];
+                        const bPlayers = rest.filter(p => newTeams[p.id] === 'B' && p.position !== pos);
+                        if (bPlayers.length > 0) {
+                            const swapB = bPlayers.reduce((prev, cur) =>
+                                Math.abs(cur.strength - weakA.strength) < Math.abs(prev.strength - weakA.strength) ? cur : prev);
+                            newTeams[weakA.id] = 'B';
+                            newTeams[swapB.id] = 'A';
+                        }
+                    } else if (inB.length - inA.length >= 2) {
+                        const weakB = inB[inB.length - 1];
+                        const aPlayers = rest.filter(p => newTeams[p.id] === 'A' && p.position !== pos);
+                        if (aPlayers.length > 0) {
+                            const swapA = aPlayers.reduce((prev, cur) =>
+                                Math.abs(cur.strength - weakB.strength) < Math.abs(prev.strength - weakB.strength) ? cur : prev);
+                            newTeams[weakB.id] = 'A';
+                            newTeams[swapA.id] = 'B';
+                        }
+                    }
+                });
+
+                updateCurrentMatch({ ...currentMatch, teams: newTeams });
+                setAutoConfirm(false);
+            };
+            // ───────────────────────────────────────────────────────────
 
             const handleAssignTeam = (playerId, team) => {
                 if (isCompleted || !isAdmin) return;
@@ -909,15 +1094,30 @@
 
             return (
                 <section id="board-capture-area" className="bg-stone-800 rounded-2xl p-2 sm:p-6 shadow-xl border border-stone-700/50">
-                    <div className="flex justify-between items-center mb-3 sm:mb-6 px-1 sm:px-0">
+                    <div className="flex justify-between items-center mb-3 sm:mb-6 px-1 sm:px-0 gap-2">
                         <h2 className="text-base sm:text-2xl font-bold text-white flex items-center gap-1.5 sm:gap-2">
                             <i className="ph-fill ph-chalkboard-teacher text-blue-400"></i> Pizarra {isCompleted && '(Final)'}
                         </h2>
-                        {isAdmin && (
-                            <button data-html2canvas-ignore="true" onClick={() => captureAndDownload('board-capture-area', `Pizarra_${currentMatch.date}`, setIsDownloading)} className="bg-pitch-600 hover:bg-pitch-500 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg font-semibold flex items-center gap-1.5 transition-colors shadow-md text-[10px] sm:text-sm">
-                                {isDownloading ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-download-simple"></i>} JPG
-                            </button>
-                        )}
+                        <div className="flex items-center gap-1.5 sm:gap-2" data-html2canvas-ignore="true">
+                            {isAdmin && !isCompleted && (
+                                autoConfirm ? (
+                                    <div className="flex items-center gap-1 bg-purple-900/40 border border-purple-600 rounded-lg px-2 py-1">
+                                        <span className="text-purple-300 text-[9px] sm:text-xs font-bold">¿Confirmar?</span>
+                                        <button onClick={autoAssignTeams} className="bg-purple-600 hover:bg-purple-500 text-white px-1.5 py-0.5 rounded text-[9px] sm:text-xs font-bold transition-colors">Sí</button>
+                                        <button onClick={() => setAutoConfirm(false)} className="bg-stone-700 hover:bg-stone-600 text-stone-300 px-1.5 py-0.5 rounded text-[9px] sm:text-xs font-bold transition-colors">No</button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => setAutoConfirm(true)} className="bg-purple-700 hover:bg-purple-600 text-white px-2 sm:px-3 py-1 sm:py-2 rounded-lg font-semibold flex items-center gap-1 transition-colors shadow-md text-[10px] sm:text-sm border border-purple-500/50" title="Asignar equipos automáticamente de forma equitativa">
+                                        <i className="ph-fill ph-magic-wand"></i> <span className="hidden sm:inline">Auto-Equipos</span><span className="sm:hidden">Auto</span>
+                                    </button>
+                                )
+                            )}
+                            {isAdmin && (
+                                <button onClick={() => captureAndDownload('board-capture-area', `Pizarra_${currentMatch.date}`, setIsDownloading)} className="bg-pitch-600 hover:bg-pitch-500 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg font-semibold flex items-center gap-1.5 transition-colors shadow-md text-[10px] sm:text-sm">
+                                    {isDownloading ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-download-simple"></i>} JPG
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1.5 sm:gap-6">
@@ -954,6 +1154,78 @@
                             </div>
                         ))}
                     </div>
+
+                    {/* ── Indicador de Equidad ─────────────────────────── */}
+                    {(teamA.length > 0 || teamB.length > 0) && (() => {
+                        const calcStr = (p) => {
+                            const hasStats = (p.winPerc || 0) > 0 || (p.totalGoals || 0) > 0;
+                            if (!hasStats) return 20;
+                            return (p.winPerc || 0) * 0.5
+                                 + Math.min((p.totalGoals || 0) * 4, 60) * 0.3
+                                 + (p.attendancePerc || 0) * 0.2;
+                        };
+                        const sumA  = teamA.reduce((s, p) => s + calcStr(p), 0);
+                        const sumB  = teamB.reduce((s, p) => s + calcStr(p), 0);
+                        const total = sumA + sumB || 1;
+                        const pA    = sumA / total * 100;
+                        const pB    = sumB / total * 100;
+                        const eq    = 100 - Math.abs(50 - pA) * 2;
+
+                        const eqColor = eq >= 80 ? '#34d399' : eq >= 60 ? '#fbbf24' : eq >= 40 ? '#fb923c' : '#f87171';
+                        const eqLabel = eq >= 80 ? '⚖️ Muy parejos' : eq >= 60 ? '🟡 Bastante parejos' : eq >= 40 ? '🟠 Algo desparejados' : '🔴 Muy desparejados';
+
+                        const posOf = (team) => {
+                            const c = { ARQ:0, DEF:0, MED:0, DEL:0 };
+                            team.forEach(p => { if (c[p.position] !== undefined) c[p.position]++; });
+                            return c;
+                        };
+                        const posA = posOf(teamA), posB = posOf(teamB);
+
+                        return (
+                            <div className="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-stone-700 px-1 sm:px-0">
+
+                                {/* Encabezado + barra: solo admin */}
+                                {isAdmin && (
+                                    <>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="text-stone-400 font-bold text-[9px] sm:text-xs uppercase tracking-wider flex items-center gap-1">
+                                                <i className="ph-fill ph-scales"></i> Equidad de Equipos
+                                            </p>
+                                            <span className="font-black text-sm sm:text-lg" style={{ color: eqColor }}>{eq.toFixed(0)}% <span className="text-[8px] sm:text-[10px] font-semibold">{eqLabel}</span></span>
+                                        </div>
+                                        <div className="flex rounded-full overflow-hidden h-5 sm:h-6 mb-3 shadow-inner border border-stone-700">
+                                            <div className="bg-blue-600 flex items-center justify-center text-white font-black text-[9px] sm:text-xs transition-all duration-700 ease-in-out" style={{ width: `${pA}%` }}>
+                                                {pA > 12 && `${pA.toFixed(0)}%`}
+                                            </div>
+                                            <div className="bg-red-600 flex items-center justify-center text-white font-black text-[9px] sm:text-xs transition-all duration-700 ease-in-out" style={{ width: `${pB}%` }}>
+                                                {pB > 12 && `${pB.toFixed(0)}%`}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* Balance por posición: siempre visible */}
+                                <div className="grid grid-cols-4 gap-1 sm:gap-1.5">
+                                    {['ARQ','DEF','MED','DEL'].map(pos => {
+                                        const diff = Math.abs((posA[pos]||0) - (posB[pos]||0));
+                                        const unbal = isAdmin && diff >= 2;
+                                        return (
+                                            <div key={pos} className={`bg-stone-900 rounded-lg p-1 sm:p-2 text-center border ${unbal ? 'border-orange-500/60' : 'border-stone-700/60'}`}>
+                                                <p className={`text-[7px] sm:text-[9px] font-black uppercase tracking-wider mb-0.5 ${unbal ? 'text-orange-400' : 'text-stone-500'}`}>{pos}</p>
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <span className="text-blue-400 font-black text-[9px] sm:text-sm">{posA[pos]||0}</span>
+                                                    <span className="text-stone-600 text-[8px]">|</span>
+                                                    <span className="text-red-400 font-black text-[9px] sm:text-sm">{posB[pos]||0}</span>
+                                                </div>
+                                                {unbal && <p className="text-[6px] sm:text-[7px] text-orange-400 mt-0.5">⚠ desbal.</p>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })()}
+                    {/* ────────────────────────────────────────────────── */}
 
                     {!isCompleted && unassigned.length > 0 && (
                         <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-stone-700 px-1 sm:px-0">
@@ -1078,6 +1350,24 @@
             const [playerToDelete, setPlayerToDelete] = useState(null);
             const [formError, setFormError] = useState("");
             const [cropFile, setCropFile] = useState(null);
+
+            // Escuchar Ctrl+V para pegar imagen mientras el modal de jugador está abierto
+            useEffect(() => {
+                if (!isAddingPlayer) return;
+                const handler = (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of items) {
+                        if (item.type.startsWith('image/')) {
+                            setCropFile(item.getAsFile());
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                };
+                document.addEventListener('paste', handler);
+                return () => document.removeEventListener('paste', handler);
+            }, [isAddingPlayer]);
 
             const players = dbState?.players || [];
 
@@ -1204,10 +1494,21 @@
                                 </div>
                                 <div>
                                     <label className="block text-sm text-stone-400 mb-1">Foto de Perfil</label>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5">
                                         {playerForm.photoUrl && <img src={playerForm.photoUrl} className="w-8 h-8 rounded-full object-cover shrink-0" />}
                                         <input type="file" accept="image/*" onChange={e => { if(e.target.files[0]) setCropFile(e.target.files[0]); e.target.value = ''; }} className="w-full bg-stone-900 border border-stone-700 rounded-lg p-1.5 text-white outline-none text-xs cursor-pointer file:hidden" />
-                                        {playerForm.photoUrl && <button onClick={() => setPlayerForm({...playerForm, photoUrl: ''})} className="text-red-400 hover:text-red-300 p-1"><i className="ph ph-trash"></i></button>}
+                                        <button type="button" onClick={async () => {
+                                            try {
+                                                const items = await navigator.clipboard.read();
+                                                for (const item of items) {
+                                                    const t = item.types.find(x => x.startsWith('image/'));
+                                                    if (t) { const blob = await item.getType(t); setCropFile(new File([blob],'pasted.png',{type:t})); break; }
+                                                }
+                                            } catch { alert('Presiona Ctrl+V en cualquier parte de esta ventana para pegar.'); }
+                                        }} className="shrink-0 bg-stone-700 hover:bg-stone-600 text-stone-300 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors border border-stone-600" title="Pegar imagen del portapapeles (Ctrl+V)">
+                                            📋
+                                        </button>
+                                        {playerForm.photoUrl && <button onClick={() => setPlayerForm({...playerForm, photoUrl: ''})} className="text-red-400 hover:text-red-300 p-1 shrink-0"><i className="ph ph-trash"></i></button>}
                                     </div>
                                 </div>
                             </div>
@@ -1266,6 +1567,24 @@
             const [showProfileConfig, setShowProfileConfig] = useState(false);
             const [playerConfigForm, setPlayerConfigForm] = useState({});
             const [profileCropFile, setProfileCropFile] = useState(null);
+
+            // Escuchar Ctrl+V para pegar imagen en el modal de perfil
+            useEffect(() => {
+                if (!showProfileConfig) return;
+                const handler = (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of items) {
+                        if (item.type.startsWith('image/')) {
+                            setProfileCropFile(item.getAsFile());
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                };
+                document.addEventListener('paste', handler);
+                return () => document.removeEventListener('paste', handler);
+            }, [showProfileConfig]);
             const [useFirebase, setUseFirebase] = useState(false);
             const unsubscribeRef = useRef(null);
             const firebaseRef = useRef(null); // { docRef } tras init
@@ -1643,10 +1962,21 @@
                         <div className="space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar pr-2">
                             <div className="flex justify-center mb-4 relative">
                                 <PlayerAvatar player={playerConfigForm} className="w-24 h-24 text-3xl shadow-xl" />
-                                <label className="absolute bottom-0 right-1/2 translate-x-12 translate-y-2 bg-pitch-600 hover:bg-pitch-500 text-white p-2 rounded-full cursor-pointer shadow-lg border-2 border-stone-800 transition-colors">
+                                <label className="absolute bottom-0 right-1/2 translate-x-12 translate-y-2 bg-pitch-600 hover:bg-pitch-500 text-white p-2 rounded-full cursor-pointer shadow-lg border-2 border-stone-800 transition-colors" title="Seleccionar archivo">
                                     <i className="ph-fill ph-camera text-lg"></i>
                                     <input type="file" accept="image/*" onChange={e => { if(e.target.files[0]) setProfileCropFile(e.target.files[0]); e.target.value = ''; }} className="hidden" />
                                 </label>
+                                <button type="button" onClick={async () => {
+                                    try {
+                                        const items = await navigator.clipboard.read();
+                                        for (const item of items) {
+                                            const t = item.types.find(x => x.startsWith('image/'));
+                                            if (t) { const blob = await item.getType(t); setProfileCropFile(new File([blob],'pasted.png',{type:t})); break; }
+                                        }
+                                    } catch { alert('Presiona Ctrl+V en cualquier parte de esta ventana para pegar.'); }
+                                }} className="absolute bottom-0 right-1/2 translate-x-[52px] translate-y-8 bg-stone-700 hover:bg-stone-600 text-stone-300 p-1.5 rounded-full cursor-pointer shadow-lg border-2 border-stone-800 transition-colors" title="Pegar imagen (Ctrl+V)">
+                                    📋
+                                </button>
                             </div>
                             <div className="text-center">
                                 {playerConfigForm.photoUrl && <button onClick={() => setPlayerConfigForm({...playerConfigForm, photoUrl: ''})} className="text-xs text-red-400 hover:text-red-300 font-semibold"><i className="ph ph-trash"></i> Eliminar foto actual</button>}
