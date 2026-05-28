@@ -74,20 +74,43 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #57534e; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #78716c; }
 
-        /* ── Solo para captura JPG del roster: mejor espaciado y centrado ── */
+        /* ── Solo para captura JPG del roster: texto centrado con height=line-height ── */
+        #roster-capture-area.jpg-capturing .player-card {
+            display: flex !important;
+            align-items: center !important;
+            min-height: 52px !important;
+        }
+        /* Nombre: height = font-size = line-height → texto ocupa caja exacta, flex la centra */
+        #roster-capture-area.jpg-capturing .player-card .player-name {
+            height: 16px !important;
+            line-height: 16px !important;
+            font-size: 14px !important;
+            overflow: visible !important;
+            white-space: nowrap !important;
+            display: block !important;
+            align-self: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
         #roster-capture-area.jpg-capturing .badge-wrap {
-            margin-top: 10px !important;
+            display: flex !important;
+            align-items: center !important;
+            align-self: center !important;
             gap: 4px !important;
         }
+        /* Badges: line-height = (total-height - 2borders) → texto centrado por line-height */
         #roster-capture-area.jpg-capturing .badge-status,
         #roster-capture-area.jpg-capturing .badge-pos {
-            padding: 4px 10px !important;
+            display: inline-block !important;
+            height: 25px !important;
+            line-height: 23px !important;
+            padding: 0 10px !important;
             font-size: 11px !important;
-            line-height: 1.3 !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
             border-radius: 5px !important;
+            box-sizing: border-box !important;
+            align-self: center !important;
+            vertical-align: middle !important;
+            white-space: nowrap !important;
         }
     </style>
 </head>
@@ -219,16 +242,18 @@
             );
         }
 
-        function PlayerAvatar({ player, className = "w-10 h-10 text-sm" }) {
+        function PlayerAvatar({ player, className = "w-10 h-10 text-sm", style = {} }) {
             const [imgError, setImgError] = useState(false);
             const hasImage = player.photoUrl && !imgError;
             if (hasImage) {
-                return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)} className={`${className} rounded-full object-cover object-center border border-pitch-500 shadow-inner bg-stone-900 shrink-0`} />;
+                return <img src={player.photoUrl} alt={player.name} onError={() => setImgError(true)}
+                    className={`${className} rounded-full object-cover object-center border border-pitch-500 shadow-inner bg-stone-900 shrink-0`}
+                    style={{ flexShrink:0, alignSelf:'center', ...style }} />;
             }
             return (
                 <div
                     className={`${className} shrink-0 rounded-full bg-gradient-to-br from-pitch-600 to-pitch-800 border border-pitch-500 shadow-inner`}
-                    style={{ display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', textTransform:'uppercase', lineHeight:'1', textAlign:'center' }}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', textTransform:'uppercase', lineHeight:'1', textAlign:'center', flexShrink:0, alignSelf:'center', ...style }}
                 >
                     {player.name?.charAt(0)}{player.lastName ? player.lastName.charAt(0) : ''}
                 </div>
@@ -636,7 +661,7 @@
 
                     {(() => {
                         const BADGE = {
-                            full:            { c:'text-pitch-400', bg:'bg-pitch-400/10', b:'border-pitch-400/20', i:'ph-fill ph-check-circle',   label:'Adelanto Confirmado' },
+                            full:            { c:'text-pitch-400', bg:'bg-pitch-400/10', b:'border-pitch-400/20', i:'ph-fill ph-check-circle',   label:'Adelanto Ok' },
                             half:            { c:'text-gold',      bg:'bg-gold/10',      b:'border-gold/20',      i:'ph-fill ph-star-half',        label:'Medio Cupo' },
                             free:            { c:'text-blue-400',  bg:'bg-blue-400/10',  b:'border-blue-400/20',  i:'ph-fill ph-gift',             label:'Invitado' },
                             pending_payment: { c:'text-red-400',   bg:'bg-red-400/10',   b:'border-red-400/20',   i:'ph-fill ph-warning-circle',   label:'Falta Adelanto' },
@@ -650,28 +675,44 @@
                             const status = attendeesMap[player.id];
                             const bd = BADGE[status];
                             return (
-                                <div key={player.id} className="flex items-start gap-2 sm:gap-3 bg-stone-900 p-2 sm:p-3 rounded-xl border border-stone-700">
-                                    <PlayerAvatar player={player} className="w-8 h-8 sm:w-10 sm:h-10 text-xs shrink-0 mt-0.5" />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-semibold text-stone-100 text-[10px] sm:text-base leading-tight break-words">{formatPlayerName(player, isAdmin)}</p>
-                                        {/* Badge + posición: siempre visibles (aparecen en JPG) */}
-                                        <div className="badge-wrap flex flex-wrap items-center gap-0.5 mt-0.5">
+                                <div key={player.id}
+                                    className="player-card flex items-center gap-2 sm:gap-3 bg-stone-900 px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl border border-stone-700 min-w-0"
+                                    style={{ display:'flex', alignItems:'center', flexDirection:'row' }}>
+                                    {/* Avatar */}
+                                    <PlayerAvatar player={player} className="w-8 h-8 sm:w-9 sm:h-9 text-xs shrink-0"
+                                        style={{ flexShrink:0, alignSelf:'center' }} />
+
+                                    {/* Columna: nombre arriba, badges + select abajo */}
+                                    <div className="flex-1 min-w-0" style={{ flex:'1 1 0', minWidth:0 }}>
+                                        <p className="player-name font-semibold text-stone-100 text-[10px] sm:text-sm leading-tight"
+                                            style={{ flex:'1 1 0', minWidth:0, alignSelf:'center', lineHeight:'1', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                                            {player.name}{player.lastName ? ` ${player.lastName}` : ''}
+                                        </p>
+
+                                        {/* Badge de estado + posición */}
+                                        <div className="badge-wrap flex items-center gap-0.5 mt-0.5 flex-wrap"
+                                            style={{ display:'flex', alignItems:'center', flexShrink:0, gap:'3px', marginTop:'3px' }}>
                                             {bd && (
-                                                <div className={`badge-status inline-flex items-center gap-0.5 ${bd.c} ${bd.bg} border ${bd.b} px-1 py-0.5 rounded text-[6px] sm:text-[10px] font-semibold whitespace-nowrap`}>
-                                                    <i className={bd.i}></i> {bd.label}
+                                                <div className={`badge-status inline-flex items-center gap-0.5 ${bd.c} ${bd.bg} border ${bd.b} px-1 py-0.5 rounded text-[7px] sm:text-[9px] font-semibold whitespace-nowrap`}
+                                                    style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', lineHeight:'1', whiteSpace:'nowrap' }}>
+                                                    <i className={bd.i}></i>
+                                                    <span>{bd.label}</span>
                                                 </div>
                                             )}
                                             {player.position && (
-                                                <span className="badge-pos inline-flex items-center text-[6px] sm:text-[9px] font-bold text-stone-300 bg-stone-700 border border-stone-600 px-1 py-0.5 rounded whitespace-nowrap">
+                                                <span className="badge-pos inline-flex items-center justify-center text-[7px] sm:text-[8px] font-bold text-stone-300 bg-stone-700 border border-stone-600 px-1 py-0.5 rounded whitespace-nowrap"
+                                                    style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', lineHeight:'1', whiteSpace:'nowrap' }}>
                                                     {player.position}
                                                 </span>
                                             )}
                                         </div>
-                                        {/* Select para edición admin: oculto en JPG */}
+
+                                        {/* Select de edición (oculto en JPG) */}
                                         {canEdit && (
-                                            <select data-html2canvas-ignore="true" value={status} onChange={(e) => handleStatusChange(player.id, e.target.value)}
-                                                className="mt-1 w-full text-[7px] sm:text-sm border border-stone-600 rounded-md px-1 py-0.5 focus:border-pitch-500 outline-none bg-stone-800 text-stone-300 font-semibold">
-                                                <option className="bg-stone-900 text-white" value="full">✔️ Adelanto Confirmado</option>
+                                            <select data-html2canvas-ignore="true" value={status}
+                                                onChange={(e) => handleStatusChange(player.id, e.target.value)}
+                                                className="mt-1 w-full shrink-0 bg-stone-800 text-[7px] sm:text-xs border border-stone-600 rounded-md px-1 py-0.5 focus:border-pitch-500 outline-none text-stone-200 font-semibold">
+                                                <option className="bg-stone-900 text-white" value="full">✔️ Adelanto Ok</option>
                                                 <option className="bg-stone-900 text-white" value="half">🌗 Medio Cupo</option>
                                                 <option className="bg-stone-900 text-white" value="free">🎁 Invitado</option>
                                                 <option className="bg-stone-900 text-white" value="pending_payment">🔴 Falta Adelanto</option>
@@ -1244,15 +1285,18 @@
                         <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                             <i className="ph-fill ph-ranking text-gold"></i> Ranking Oficial
                         </h2>
-                        <div className="flex items-center gap-2 bg-stone-900 border border-stone-600 rounded-lg p-1 w-full sm:w-auto">
-                            <i className="ph-fill ph-funnel text-stone-400 pl-2"></i>
-                            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-stone-900 text-sm text-white p-2 outline-none w-full cursor-pointer rounded-md">
+                        <div className="flex items-center justify-center sm:justify-start gap-1.5 bg-stone-900 border border-stone-600 rounded-lg px-3 py-1.5 w-full sm:w-auto">
+                            <i className="ph-fill ph-funnel text-stone-400 text-sm shrink-0"></i>
+                            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                                className="bg-transparent text-sm text-white outline-none cursor-pointer appearance-none rounded-md"
+                                style={{ textAlign:'center', textAlignLast:'center' }}>
                                 <option className="bg-stone-900 text-white" value="asistencia">Porcentaje de Asistencia</option>
                                 <option className="bg-stone-900 text-white" value="victorias">Porcentaje de Victorias</option>
                                 <option className="bg-stone-900 text-white" value="goles">Cantidad de Goles</option>
                                 <option className="bg-stone-900 text-white" value="alfabetico">Orden Alfabético</option>
                                 <option className="bg-stone-900 text-white" value="posicion">Por Posición en Campo</option>
                             </select>
+                            <i className="ph ph-caret-down text-stone-400 text-xs shrink-0 pointer-events-none"></i>
                         </div>
                     </div>
 
@@ -1283,10 +1327,7 @@
                                             <span className={`inline-flex items-center justify-center w-4 h-4 sm:w-6 sm:h-6 rounded-full text-[10px] sm:text-xs font-bold ${index < 3 && sortBy==='asistencia' ? 'bg-gold/20 text-gold' : 'text-stone-500'}`}>{index + 1}</span>
                                         </td>
                                         <td className="p-1 sm:p-3">
-                                            <div className="flex items-center gap-1 sm:gap-2">
-                                                <PlayerAvatar player={player} className="w-8 h-8 text-xs hidden sm:flex" />
-                                                <span className="font-semibold text-stone-200 text-[11px] sm:text-base truncate max-w-[75px] sm:max-w-none block">{formatPlayerName(player, true)}</span>
-                                            </div>
+                                            <span className="font-semibold text-stone-200 text-[11px] sm:text-base truncate max-w-[75px] sm:max-w-none block">{formatPlayerName(player, true)}</span>
                                         </td>
                                         <td className="p-1 sm:p-3 text-center">
                                             {player.position ? <span className="text-[8px] sm:text-[10px] font-bold text-stone-400 bg-stone-800 px-1 py-0.5 sm:px-2 sm:py-1 rounded">{player.position}</span> : '-'}
@@ -1385,13 +1426,15 @@
                     <div className="absolute top-0 right-0 bg-choco-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">MODO ADMIN</div>
                     <h2 className="text-base sm:text-2xl font-bold text-white flex items-center gap-2 mb-3 sm:mb-6 mt-1 sm:mt-2"><i className="ph-fill ph-database text-choco-400"></i> Base de Datos</h2>
 
-                    <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                        <div className="bg-stone-900 rounded-xl p-2.5 sm:p-5 border border-stone-700 flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-white font-semibold mb-1 sm:mb-2 flex items-center gap-1.5 text-xs sm:text-base"><i className="ph-fill ph-files"></i> Respaldos</h3>
-                                <p className="text-[10px] sm:text-sm text-stone-400 mb-2 sm:mb-4 hidden sm:block">Exporta o importa toda la base de datos.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+                        {/* Respaldos: horizontal compacto en móvil */}
+                        <div className="bg-stone-900 rounded-xl p-2.5 sm:p-5 border border-stone-700 flex flex-row sm:flex-col items-center sm:items-stretch justify-between gap-3 sm:gap-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <i className="ph-fill ph-files text-stone-400 text-sm sm:text-base"></i>
+                                <h3 className="text-white font-semibold text-xs sm:text-base whitespace-nowrap">Respaldos</h3>
                             </div>
-                            <div className="flex gap-1.5 sm:gap-2">
+                            <p className="text-[10px] sm:text-sm text-stone-400 mb-4 hidden sm:block">Exporta o importa toda la base de datos.</p>
+                            <div className="flex gap-1.5 sm:gap-2 sm:mt-auto">
                                 <button onClick={handleExportDB} className="flex-1 bg-stone-700 hover:bg-stone-600 py-1.5 sm:py-2 rounded-lg text-white font-semibold text-[10px] sm:text-sm transition-colors flex items-center justify-center gap-1 sm:gap-2"><i className="ph ph-download-simple"></i> <span className="hidden sm:inline">Exportar</span><span className="sm:hidden">Exp.</span></button>
                                 <label className="flex-1 bg-choco-700 hover:bg-choco-600 cursor-pointer py-1.5 sm:py-2 rounded-lg text-white font-semibold text-[10px] sm:text-sm transition-colors flex items-center justify-center gap-1 sm:gap-2">
                                     <i className="ph ph-upload-simple"></i> <span className="hidden sm:inline">Importar</span><span className="sm:hidden">Imp.</span> <input type="file" accept=".json" className="hidden" onChange={handleImportDB} />
@@ -1421,9 +1464,10 @@
                                 {filteredPlayers.map(p => (
                                     <div key={p.id} className="flex flex-row items-center bg-stone-800 p-1 sm:p-3 rounded-lg border border-stone-700 gap-1 sm:gap-2">
                                         <PlayerAvatar player={p} className="w-5 h-5 sm:w-8 sm:h-8 text-[8px] sm:text-xs shrink-0" />
-                                        <div className="min-w-0 flex-1 overflow-hidden">
-                                            <span className="font-medium text-stone-200 block text-[8px] sm:text-sm leading-tight">{p.name}{p.lastName ? ` ${p.lastName}` : ''}</span>
-                                            <div className="flex flex-nowrap gap-0.5 mt-0.5 overflow-hidden">
+                                        {/* Nombre + etiquetas en una sola línea */}
+                                        <div className="min-w-0 flex-1 flex items-center gap-1 sm:gap-1.5 overflow-hidden">
+                                            <span className="font-medium text-stone-200 text-[8px] sm:text-sm leading-tight whitespace-nowrap shrink-0">{p.name}{p.lastName ? ` ${p.lastName}` : ''}</span>
+                                            <div className="flex flex-nowrap gap-0.5 overflow-hidden">
                                                 {p.tags.map(t => <span key={t.id} className={`text-[6px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded border whitespace-nowrap ${t.color}`}>{t.label}</span>)}
                                             </div>
                                         </div>
@@ -1836,15 +1880,21 @@
                             <div className="flex items-center gap-2 text-stone-300 font-semibold text-sm">
                                 <i className="ph-fill ph-calendar-check text-xl text-pitch-500"></i> Mostrando Pichanga del:
                             </div>
-                            <div className="flex w-full sm:w-auto gap-2">
-                                <select value={selectedMatchId || ''} onChange={e => setSelectedMatchId(e.target.value)} className="bg-stone-900 border border-stone-600 rounded-lg p-2.5 text-white outline-none flex-1 font-medium text-sm capitalize">
-                                    {(dbState.matches || []).sort((a,b) => b.date.localeCompare(a.date)).map(m => (
-                                        <option className="bg-stone-900 text-white" key={m.id} value={m.id}>{formatDateText(m.date) || m.date || 'Fecha por definir'} {m.status==='completed' ? '(Finalizada)' : '(Próxima)'}</option>
-                                    ))}
-                                </select>
+                            <div className="flex w-full sm:w-auto gap-2 min-w-0">
+                                <div className="flex items-center justify-center gap-1.5 bg-stone-900 border border-stone-600 rounded-lg px-3 py-2.5 flex-1 min-w-0 overflow-hidden">
+                                    <i className="ph-fill ph-calendar-check text-pitch-500 text-sm shrink-0"></i>
+                                    <select value={selectedMatchId || ''} onChange={e => setSelectedMatchId(e.target.value)}
+                                        className="bg-transparent appearance-none text-white outline-none font-medium text-sm capitalize min-w-0 w-full"
+                                        style={{ textAlign:'center', textAlignLast:'center' }}>
+                                        {(dbState.matches || []).sort((a,b) => b.date.localeCompare(a.date)).map(m => (
+                                            <option className="bg-stone-900 text-white" key={m.id} value={m.id}>{formatDateText(m.date) || m.date || 'Fecha por definir'} {m.status==='completed' ? '(Finalizada)' : '(Próxima)'}</option>
+                                        ))}
+                                    </select>
+                                    <i className="ph ph-caret-down text-stone-400 text-xs shrink-0 pointer-events-none"></i>
+                                </div>
                                 {isAdmin && (
-                                    <button onClick={createNewMatch} className="bg-pitch-600 hover:bg-pitch-500 text-white px-3 py-2 rounded-lg font-bold transition-colors shadow-lg shrink-0 flex items-center gap-1 text-sm" title="Programar Nueva Pichanga">
-                                        <i className="ph-bold ph-plus"></i> Nueva
+                                    <button onClick={createNewMatch} className="bg-pitch-600 hover:bg-pitch-500 text-white px-2.5 py-2 rounded-lg font-bold transition-colors shadow-lg shrink-0 flex items-center gap-1 text-sm" title="Programar Nueva Pichanga">
+                                        <i className="ph-bold ph-plus text-base"></i><span className="hidden sm:inline"> Nueva</span>
                                     </button>
                                 )}
                             </div>
